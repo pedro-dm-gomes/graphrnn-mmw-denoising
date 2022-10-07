@@ -2,11 +2,8 @@
 
 Tensorflow Implementation of Graph-RNN for mmW (point cloud) denoising
 
-## Overview
-<img src="https://github.com/pedro-dm-gomes/Graph-RNN/blob/main/full_scheme.png" scale="0.2">
 
-# Graph-RNN
-We propose a new neural network with Graph-RNN cells, for point cloud sequence prediction
+We propose a new neural network with Graph-RNN cells, for point cloud sequence denoising
 
 
 [[Project]](https://github.com/pedro-dm-gomes/Graph-RNN) [[Paper]](https://arxiv.org/abs/2102.07482)     
