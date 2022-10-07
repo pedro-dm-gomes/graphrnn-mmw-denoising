@@ -35,9 +35,9 @@ Two models are provided
  
 ### Graph-RNN Cells/Modules
 Three graph-rnn cells are provided:
-1. Simple_GraphRNNCell: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
-2. Simple_GraphRNNCell_bn:Simple implementation of Graph-RNN cell + Batch normalization (implemeted using tf_util lib from [1])
-3. Displacement_GraphRNNCell_bn: Equal to Simple_GraphRNNCell_bn, but does not considers point cordinates (x,y,z) during the convolution, only the dipalcementes $(x-x, y-y2, z`-z2)$
+1. **Simple_GraphRNNCell**: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
+2. **Simple_GraphRNNCell_bn**:Simple implementation of Graph-RNN cell + Batch normalization (implemeted using tf_util lib from [1])
+3. **Displacement_GraphRNNCell_bn**: Equal to Simple_GraphRNNCell_bn, but does not considers point cordinates $(x_i,y_i,z_i)$ during the convolution, only the dipalcementes $(x_i-x_j, y_i-y_j, z_i - z_j)$
 
 ## Visual Results
 
