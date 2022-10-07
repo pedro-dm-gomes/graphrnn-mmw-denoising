@@ -11,9 +11,8 @@ The Makefiles to compile the code are in `modules/tf_ops`
 
 ### Datasets
 The models were trained  evaluated with the following datasets:
-1. [Labelled mmW Point Cloud (100 points,9 sequences)](https://drive.google.com/open?id=17RpNwMLDcR5fLr0DJkRxmC5WgFn3RwK_) &emsp; 
-
-To create the Human Bodies dataset follow the instruction in the Dataset folder.
+1. [Labelled mmW Point Cloud (9 sequences, 1000 points)](https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8)
+The dataset contains the sequences in original position (Not_Rotated) and tranlated acording to robot position  (Rotated).
 
 ## Usage
 
