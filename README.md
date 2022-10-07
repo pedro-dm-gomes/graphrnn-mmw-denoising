@@ -10,10 +10,8 @@ Compile the code. You will need to select the correct CUDA version and Tensorflo
 The Makefiles to compile the code are in `modules/tf_ops`
 
 ### Datasets
-The models were evaluated with the following datasets:
-1. [Moving MNIST Point Cloud (1 digit)](https://drive.google.com/open?id=17RpNwMLDcR5fLr0DJkRxmC5WgFn3RwK_) &emsp; 
-2. [Moving MNIST Point Cloud (2 digits)](https://drive.google.com/open?id=11EkVsE5fmgU5D5GsOATQ6XN17gmn7IvF) &emsp; 
-3. [JPEG Dynamic Human Bodies (4000 points)](https://drive.google.com/file/d/1hbB1EPKq3UVlXUL5m81M1E6_s5lWmoB-/view)
+The models were trained  evaluated with the following datasets:
+1. [Labelled mmW Point Cloud (100 points,9 sequences)](https://drive.google.com/open?id=17RpNwMLDcR5fLr0DJkRxmC5WgFn3RwK_) &emsp; 
 
 To create the Human Bodies dataset follow the instruction in the Dataset folder.
 
