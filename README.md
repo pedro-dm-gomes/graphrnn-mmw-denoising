@@ -22,11 +22,11 @@ To train a model
 
 To train a specific model and specific graph-rnn module
 
-    python train-eval-mmW-GraphRNN.py --model GraphRNN_cls --graph_module Simple_GraphRNNCell_bn --version r1 
+    python train-eval-mmW-GraphRNN.py --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
 
 To evaluate the model
 
-    python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell_bn --version r1 
+    python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
 
 ### Models
 Two models are provided
@@ -35,10 +35,10 @@ Two models are provided
  
 ### Graph-RNN Cells/Modules
 Three graph-rnn cells are provided:
-1. Simple_GraphRNNCell
-2. Simple_GraphRNNCell_bn
-3. Displacement_GraphRNNCell_bn
-4. 
+1. Simple_GraphRNNCell: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
+2. Simple_GraphRNNCell_bn:Simple implementation of Graph-RNN cell + Batch normalization (implemeted using tf_util lib from [1])
+3. Displacement_GraphRNNCell_bn: Equal to Simple_GraphRNNCell_bn, but does not considers point cordinates (x,y,z) during the convolution, only the dipalcementes $(x-x, y-y2, z`-z2)$
+
 ## Visual Results
 
 
