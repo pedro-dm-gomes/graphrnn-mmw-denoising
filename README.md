@@ -16,10 +16,6 @@ The dataset contains the sequences in original position (Not_Rotated) and tranla
 
 ## Usage
 
-
-
-
-#### MNIST
 To train a model
 
     python train-mmnist-GraphRNN.py
@@ -28,30 +24,21 @@ To evaluate the model
 
     python eval-mmnist.py
 
-#### Human Bodies 
-to train the model without color or with color
 
-    python train-bodies-GraphRNN.py
-    python train-bodies-GraphRNN_color.py
-
-to evaluate
-
-    python eval-bodies.py
-    python eval-bodies_color.py
-
-### Datasets
+#### Models
 The models were evaluated with the following datasets:
 
 To create the Human Bodies dataset follow the instruction in the Dataset folder.
+
+### Graph-RNN modules
 
 ## Visual Results
 
 
 
-## Acknowledgement
+#### Acknowledgement
 The parts of this codebase is borrowed from Related Repos:
-
-### Related Repos
+#### Related Repos
 1. PointRNN TensorFlow implementation: https://github.com/hehefan/PointRNN
 2. PointNet++ TensorFlow implementation: https://github.com/charlesq34/pointnet2
 3. Dynamic Graph CNN for Learning on Point Clouds https://github.com/WangYueFt/dgcnn
