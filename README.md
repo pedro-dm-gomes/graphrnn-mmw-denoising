@@ -33,8 +33,12 @@ Two models are provided
 1. **GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between two frames (t) and (t-1) 
 3. **Stacked_GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
  
-#### Graph-RNN Cells/Modules
-
+### Graph-RNN Cells/Modules
+Three graph-rnn cells are provided:
+1. Simple_GraphRNNCell
+2. Simple_GraphRNNCell_bn
+3. Displacement_GraphRNNCell_bn
+4. 
 ## Visual Results
 
 
