@@ -18,7 +18,11 @@ The dataset contains the sequences in original position (Not_Rotated) and tranla
 
 To train a model
 
-    python train-mmnist-GraphRNN.py
+    python train-eval-mmW-GraphRNN.py 
+
+To train a specific model and specific graph-rnn module
+
+    python train-eval-mmW-GraphRNN.py --model GraphRNN_cls --graph_module Simple_GraphRNNCell_bn --version r1 
 
 To evaluate the model
 
