@@ -33,7 +33,7 @@ The following  models are provided
 1. **GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between two frames (t) and (t-1) 
 3. **Stacked_GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
  
-### Graph-RNN Cells/Modules
+### Graph-RNN Modules
 The following graph-rnn cells are provided:
 1. **Simple_GraphRNNCell**: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
 2. **Simple_GraphRNNCell_bn**:Simple implementation of Graph-RNN cell with Batch normalization (implemeted using tf_util lib from [1])
