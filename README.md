@@ -30,7 +30,7 @@ The models were evaluated with the following datasets:
 
 To create the Human Bodies dataset follow the instruction in the Dataset folder.
 
-### Graph-RNN modules
+#### Graph-RNN Cells/Modules
 
 ## Visual Results
 
