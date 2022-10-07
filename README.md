@@ -1,4 +1,4 @@
-# Graph-RNN for point cloud milimeter-wave (mmW) denosing
+# Graph-RNN for point cloud millimetre-wave (mmW) denoising
 
 Tensorflow Implementation of Graph-RNN for mmW (point cloud) denoising
 We propose a new neural network with Graph-RNN cells, for point cloud sequence denoising
@@ -6,13 +6,13 @@ We propose a new neural network with Graph-RNN cells, for point cloud sequence d
 ### Installation
 
 Install <a href="https://www.tensorflow.org/get_started/os_setup" target="_blank">TensorFlow</a>. The code has been tested with Python 3.6, TensorFlow 1.12.0, CUDA 9.0 and cuDNN 7.21
-Compile the code. You will need to select the correct CUDA version and Tensorflow instaled in your computer. For that edit the Makefiles to the paths of your Cuda and Tensorflow directories.
+Compile the code. You will need to select the correct CUDA version and Tensorflow instaled on your computer. For that edit the Makefiles to the paths of your Cuda and Tensorflow directories.
 The Makefiles to compile the code are in `modules/tf_ops`
 
 ### Datasets
-The models were trained  evaluated with the following datasets:
+The models were trained and evaluated with the following datasets:
 1. [Labelled mmW Point Cloud (9 sequences, 1000 points)](https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8)
-The dataset contains the sequences in original position (Not_Rotated) and tranlated acording to robot position  (Rotated).
+The dataset contains the sequences in the original position (Not_Rotated) and translated according to the robot position  (Rotated).
 
 ## Usage
 
@@ -30,8 +30,8 @@ To evaluate the model
 
 ### Models
 Two models are provided
-1. **GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between two frames (t) and (t-1) 
-3. **Stacked_GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
+1. **GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between two frames (t) and (t-1) 
+3. **Stacked_GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
  
 ### Graph-RNN Cells/Modules
 Three graph-rnn cells are provided:
@@ -44,7 +44,7 @@ Three graph-rnn cells are provided:
 
 
 #### Acknowledgement
-The parts of this codebase is borrowed from Related Repos:
+The parts of this codebase are borrowed from Related Repos:
 #### Related Repos
 1. PointRNN TensorFlow implementation: https://github.com/hehefan/PointRNN
 2. PointNet++ TensorFlow implementation: https://github.com/charlesq34/pointnet2
