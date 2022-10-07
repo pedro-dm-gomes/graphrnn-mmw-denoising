@@ -1,4 +1,4 @@
-# Graph-rnn for mmw denosing
+# Graph-rnn for radar MMW denosing
 
 Tensorflow Implementation of Graph-RNN for mmW (point cloud) denoising
 We propose a new neural network with Graph-RNN cells, for point cloud sequence denoising
