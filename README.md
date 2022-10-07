@@ -26,14 +26,16 @@ To train a specific model and specific graph-rnn module
 
 To evaluate the model
 
-    python eval-mmnist.py
-
+    python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell_bn --version r1 
 
 #### Models
-The models were evaluated with the following datasets:
+Two models are provided
+1. GraphRNN_cls
+Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between two frames (t) and (t-1) 
 
-To create the Human Bodies dataset follow the instruction in the Dataset folder.
-
+2. Stacked_GraphRNN_cls
+Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
+ 
 #### Graph-RNN Cells/Modules
 
 ## Visual Results
