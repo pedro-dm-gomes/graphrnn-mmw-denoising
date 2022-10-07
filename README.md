@@ -28,13 +28,10 @@ To evaluate the model
 
     python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell_bn --version r1 
 
-#### Models
+### Models
 Two models are provided
-1. GraphRNN_cls
-Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between two frames (t) and (t-1) 
-
-2. Stacked_GraphRNN_cls
-Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
+1. **GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between two frames (t) and (t-1) 
+3. **Stacked_GraphRNN_cls**: Each Graph-RNN cells learns dynamic features from spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
  
 #### Graph-RNN Cells/Modules
 
