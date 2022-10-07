@@ -22,7 +22,7 @@ To train a model
 
 To train a specific model and specific graph-rnn module
 
-    python train-eval-mmW-GraphRNN.py --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
+    python train-eval-mmW-GraphRNN.py --data-dir /Datasets/Labelled_mmW/Rotated_dataset --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
 
 To evaluate the model
 
