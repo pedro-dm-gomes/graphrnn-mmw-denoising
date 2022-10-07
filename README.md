@@ -29,14 +29,14 @@ To evaluate the model
     python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
 
 ### Models
-Two models are provided
+The following  models are provided
 1. **GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between two frames (t) and (t-1) 
 3. **Stacked_GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
  
 ### Graph-RNN Cells/Modules
-Three graph-rnn cells are provided:
+The following graph-rnn cells are provided:
 1. **Simple_GraphRNNCell**: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
-2. **Simple_GraphRNNCell_bn**:Simple implementation of Graph-RNN cell + Batch normalization (implemeted using tf_util lib from [1])
+2. **Simple_GraphRNNCell_bn**:Simple implementation of Graph-RNN cell with Batch normalization (implemeted using tf_util lib from [1])
 3. **Displacement_GraphRNNCell_bn**: Equal to Simple_GraphRNNCell_bn, but does not considers point cordinates $(x_i,y_i,z_i)$ during the convolution, only the dipalcementes $(x_i-x_j, y_i-y_j, z_i - z_j)$
 
 ## Visual Results
