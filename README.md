@@ -11,8 +11,8 @@ The Makefiles to compile the code are in `modules/tf_ops`
 
 ### Datasets
 The models were trained and evaluated with the following datasets:
-1. [Labelled mmW Point Cloud (9 sequences, 1000 points)](https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8)
-The dataset contains the sequences in the original position (Not_Rotated) and translated according to the robot position  (Rotated).
+1. [Labelled mmW Point Cloud (9 sequences, 200 points per frame)](https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8)
+The path to this folder should be given as input to the network
 
 ## Usage
 
