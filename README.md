@@ -1,7 +1,6 @@
 # Graph-RNN for Point Cloud Millimetre-wave (mmW) Denoising
 
 Tensorflow Implementation of Graph-RNN for mmW (point cloud) denoising
-We propose a new neural network with Graph-RNN cells, for point cloud sequence denoising
 
 ### Installation
 
