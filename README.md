@@ -19,13 +19,10 @@ To train a model
 
     python train-eval-mmW-GraphRNN.py 
 
-To train a specific model and specific graph-rnn module
+To train and evaluate specific model and specific graph-rnn module
 
-    python train-eval-mmW-GraphRNN.py --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1  --data-dir /Datasets/Labelled_mmW/Rotated_dataset 
+    python train-eval-split-mmW-GraphRNN --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1  --data-dir /Datasets/Labelled_mmW/Rotated_dataset 
 
-To evaluate the model
-
-    python eval-mmW  --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1 
 
 ### Models
 The following  models are provided
@@ -35,8 +32,7 @@ The following  models are provided
 ### Graph-RNN Modules
 The following graph-rnn cells are provided:
 1. **Simple_GraphRNNCell**: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
-2. **Simple_GraphRNNCell_bn**:Simple implementation of Graph-RNN cell with Batch normalization (implemeted using tf_util lib from [1])
-3. **Displacement_GraphRNNCell_bn**: Equal to Simple_GraphRNNCell_bn, but does not considers point cordinates $(x_i,y_i,z_i)$ during the convolution, only the dipalcementes $(x_i-x_j, y_i-y_j, z_i - z_j)$
+2. **Simple_GraphRNNCell_util**:Simple implementation of Graph-RNN cell (implemeted using tf_util lib from [1]), There is a problem with batch normalization
 
 ## Visual Results
 
