@@ -15,10 +15,6 @@ The path to this folder should be given as input to the network
 
 ## Usage
 
-To train a model
-
-    python train-eval-mmW-GraphRNN.py 
-
 To train and evaluate specific model and specific graph-rnn module
 
     python train-eval-split-mmW-GraphRNN --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1  --data-dir /Datasets/Labelled_mmW/Rotated_dataset 
