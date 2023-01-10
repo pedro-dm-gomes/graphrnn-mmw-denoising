@@ -395,7 +395,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
 
 
-      print("Loss  Accuracy: \t %f\t  %f\t"%( loss, accuracy) )
+      #print("Loss  Accuracy: \t %f\t  %f\t"%( loss, accuracy) )
       test_writer.add_summary(summary, step)  
 
       #Visualize weights
