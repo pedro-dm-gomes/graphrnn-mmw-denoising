@@ -204,7 +204,8 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
   	frame_loss = tf.reduce_mean(frame_loss)
   	sequence_loss = sequence_loss + frame_loss  	
   	
-  return sequence_loss #* 0.1
+  sequence_loss = sequence_loss/(seq_length *batch_size )
+  return sequence_loss 
   
 
  

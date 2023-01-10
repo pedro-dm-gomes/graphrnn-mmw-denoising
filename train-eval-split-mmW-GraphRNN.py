@@ -124,18 +124,12 @@ def get_classification_metrics(predicted_labels, ground_truth_labels, batch_size
   correct = np.equal(predicted_labels,ground_truth_labels)
   accuracy = np.sum(correct.astype(int)) /( int(batch_size)  *  int(seq_length) *int(num_points) )
 
-  
   true_positives = np.sum((predicted_labels == 1) & (ground_truth_labels == 1))
   false_positives = np.sum((predicted_labels == 1) & (ground_truth_labels == 0))
   true_negatives = np.sum((predicted_labels == 0) & (ground_truth_labels == 0))
   false_negatives = np.sum((predicted_labels == 0) & (ground_truth_labels == 1))
 
-  precision =  true_positives/ (true_positives + false_positives)
-  recall  = true_positives/ (true_positives + false_negatives)
-  f1_score =  ( 2*(precision * recall ) )/(precision + recall)
-
-  
-  return (accuracy, precision, recall, f1_score)
+  return (accuracy, true_positives, false_positives, true_negatives, false_negatives)
 
 def get_acurracy_tensor(predicted_labels, ground_truth_labels, batch_size, seq_length,num_points, context_frames ): 
   """
@@ -197,7 +191,6 @@ def log_string(out_str):
     LOG_FOUT.flush()
     print(out_str)
     
-
 
 def train():
   with tf.Graph().as_default():
@@ -379,63 +372,64 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
 
     total_accuracy =0
     total_loss = 0
-    t_accuracy=0
-    t_recall=0
-    t_precision=0
-    t_f1_score=0
+    Tp =0 #true positives total
+    Tn =0
+    Fp =0
+    Fn =0
+
     # Load Test data
     for sequence_nr in range(0,nr_tests):
-    	test_seq = test_dataset[sequence_nr]    	
-    	test_seq =np.array(test_seq)
-    	input_point_clouds = test_seq[:,:,0:3]
-    	input_labels = test_seq[:,:,3:4]
+      test_seq = test_dataset[sequence_nr]    	
+      test_seq =np.array(test_seq)
+      input_point_clouds = test_seq[:,:,0:3]
+      input_labels = test_seq[:,:,3:4]
 
-    	#Batch size problem - work around (this shitty way to do it)
-    	# TO DO:  FIX THIS!!!
-    	input_point_clouds = np.stack((input_point_clouds,) * args.batch_size, axis=0)
-    	input_labels = np.stack((input_labels,) * BATCH_SIZE, axis=0)
-    	
-    	feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-    	
-    	pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
-    	
-    	
-    	print("Loss  Accuracy: \t %f\t  %f\t"%( loss, accuracy) )
-    	test_writer.add_summary(summary, step)  
-    	
-    	#Visualize weights
-    	#print_weights(sess, params, 16) # FC2 Bias For GraphRNN_OG
-    	#print_weights(sess, params, 33) # FC2 Bias For GraphRNN_tf_util
-    	
-    	total_accuracy = total_accuracy + accuracy
-    	total_loss = total_loss + loss
-    	accuracy, precision, recall, f1_score = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
-    	t_precision = t_precision + precision
-    	t_recall = t_recall + recall
-    	t_f1_score =t_f1_score + f1_score 
-    	
-	
+      #Batch size problem - work around (this shitty way to do it)
+      # TO DO:  FIX THIS!!!
+      # We repeat the same sequence times the number of batches
+      input_point_clouds = np.stack((input_point_clouds,) * args.batch_size, axis=0)
+      input_labels = np.stack((input_labels,) * BATCH_SIZE, axis=0)
+
+      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+
+      pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
+
+
+      print("Loss  Accuracy: \t %f\t  %f\t"%( loss, accuracy) )
+      test_writer.add_summary(summary, step)  
+
+      #Visualize weights
+      #print_weights(sess, params, 16) # FC2 Bias For GraphRNN_OG
+      #print_weights(sess, params, 33) # FC2 Bias For GraphRNN_tf_util
+
+      total_accuracy = total_accuracy + accuracy
+      total_loss = total_loss + loss
+      accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
+      Tp = Tp + (true_positives/num_batches) #it is the same sequence repeated for batch)
+      Fp = Fp + (false_positives/num_batches)
+      Tn = Tn + (true_negatives/num_batches)
+      Fn = Fn + (false_negatives/num_batches)
+      
     mean_loss = total_loss/ nr_tests
     mean_accuracy = total_accuracy/ nr_tests
-    mean_precision = t_precision/nr_tests
-    mean_recall = t_recall/nr_tests
-    mean_f1_score = t_f1_score/nr_tests
+    precision = Tp / ( Tp+Fp)
+    recall = Tp/(Tp+Fn)
+    f1_score =2 * ( (precision * recall)/(precision+recall) )
     
-          
+     
     print('**** EVAL: %03d ****' % (epoch))
     print("[Mean] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
-    print("\nPrecision: ", mean_precision, "\nRecall: ", mean_recall, "\nF1 Score:", mean_f1_score)
+    print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')
     
+        
     # Write to File
     #log_string('****  %03d ****' % (epoch))
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
-    if not np.isnan(mean_precision) and not np.isnan(mean_recall) and not np.isnan(mean_f1_score):
-    	log_string('%03d  eval Precision Recall, F1 Score: %f \t  %f \t' % (mean_precision, mean_recall , mean_f1_score))
+    if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
+    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t' % (precision, recall , f1_score))
 
     
-
-
                   
 if __name__ == "__main__":
     train()
