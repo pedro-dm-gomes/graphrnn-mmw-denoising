@@ -305,7 +305,7 @@ def train():
     	  print("Model saved in file: %s" % save_path)
     	  #log_string("Model saved in file: %s" % save_path)
     	  
-    	if (epoch % 1000 == 0):
+    	if (epoch % 5000 == 0):
     	    	   	  	  
     	  print(" **  Evalutate Test Data ** ")
     	  eval_one_epoch(sess, ops, test_writer, epoch)

@@ -3,8 +3,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 """
-Implement a PointNet Architecture like the paper
-
+Implement a DGCNN Architecture 
 """
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -68,11 +67,11 @@ def get_model(point_cloud, is_training, model_params):
 
   out1 = tf_util.conv2d(edge_feature, 64, [1,1],
                         padding='VALID', stride=[1,1],
-                        bn=True, is_training=is_training, weight_decay=weight_decay,
+                        bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                         scope='adj_conv1', bn_decay=bn_decay, is_dist=True)
   out2 = tf_util.conv2d(out1, 64, [1,1],
                         padding='VALID', stride=[1,1],
-                        bn=True, is_training=is_training, weight_decay=weight_decay,
+                        bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                         scope='adj_conv2', bn_decay=bn_decay, is_dist=True)
 
   net_1 = tf.reduce_max(out2, axis=-2, keep_dims=True)
@@ -84,12 +83,12 @@ def get_model(point_cloud, is_training, model_params):
 
   out3 = tf_util.conv2d(edge_feature, 64, [1,1],
                        padding='VALID', stride=[1,1],
-                       bn=True, is_training=is_training, weight_decay=weight_decay,
+                       bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                        scope='adj_conv3', bn_decay=bn_decay, is_dist=True)
 
   out4 = tf_util.conv2d(out3, 64, [1,1],
                        padding='VALID', stride=[1,1],
-                       bn=True, is_training=is_training, weight_decay=weight_decay,
+                       bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                        scope='adj_conv4', bn_decay=bn_decay, is_dist=True)
   
   net_2 = tf.reduce_max(out4, axis=-2, keep_dims=True)
@@ -101,7 +100,7 @@ def get_model(point_cloud, is_training, model_params):
 
   out5 = tf_util.conv2d(edge_feature, 64, [1,1],
                        padding='VALID', stride=[1,1],
-                       bn=True, is_training=is_training, weight_decay=weight_decay,
+                       bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                        scope='adj_conv5', bn_decay=bn_decay, is_dist=True)
 
 
@@ -111,7 +110,7 @@ def get_model(point_cloud, is_training, model_params):
 
   out7 = tf_util.conv2d(tf.concat([net_1, net_2, net_3], axis=-1), 1024, [1, 1], 
                        padding='VALID', stride=[1,1],
-                       bn=True, is_training=is_training,
+                       bn=BN_FLAG, is_training=is_training,
                        scope='adj_conv7', bn_decay=bn_decay, is_dist=True)
 
   out_max = tf_util.max_pool2d(out7, [num_point, 1], padding='VALID', scope='maxpool')
@@ -125,10 +124,10 @@ def get_model(point_cloud, is_training, model_params):
                                      net_3])
 
   # CONV 
-  net = tf_util.conv2d(concat, 512, [1,1], padding='VALID', stride=[1,1],
-             bn=True, is_training=is_training, scope='seg/conv1', is_dist=True)
-  net = tf_util.conv2d(net, 256, [1,1], padding='VALID', stride=[1,1],
-             bn=True, is_training=is_training, scope='seg/conv2', is_dist=True)
+  net = tf_util.conv2d(concat, 128, [1,1], padding='VALID', stride=[1,1],
+             bn=BN_FLAG, is_training=is_training, scope='seg/conv1', is_dist=True)
+  net = tf_util.conv2d(net, 64, [1,1], padding='VALID', stride=[1,1],
+             bn=BN_FLAG, is_training=is_training, scope='seg/conv2', is_dist=True)
   net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training, scope='dp1')
   net = tf_util.conv2d(net, 2, [1,1], padding='VALID', stride=[1,1],
              activation_fn=None, scope='seg/conv3', is_dist=True)
