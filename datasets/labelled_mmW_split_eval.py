@@ -78,7 +78,7 @@ class MMW(object):
         start_limit = total_lenght - self.seq_length
         start = 0
 
-        print("[Seq] %d (of %d)  [%d - %d] (of %d)"% (rand, nr_seq, start, start + self.seq_length, total_lenght) )
+        #print("[Seq] %d (of %d)  [%d - %d] (of %d)"% (rand, nr_seq, start, start + self.seq_length, total_lenght) )
 
         cloud_sequence = []
         cloud_sequence_color = []
