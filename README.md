@@ -20,6 +20,10 @@ To train and evaluate specific model and specific graph-rnn module
     # PointNET Baseline
     python  train-eval-split-mmW-GraphRNN.py   --version pointnet_v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 64 --out_channels 64 --num-points 200 --seq-length 1 --num-samples 8 --model PointNet_cls --context-frames 0 --restore-training 0
 
+    # GraphRNN Model
+    python train-eval-split-mmW-GraphRNN.py   --version v2 --bn_flag 0  --gpu 2 --graph_module Simple_GraphRNNCell  --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 8 --out_channels 64 --num-points 200 --seq-length 100 --num-samples 8 --model GraphRNN_cls  --down-points1 2 --down-points2 4 --down-points3 8 --drop_rate 0.4  --restore-training 0
+    
+
 ### Models
 The following  models are provided
 1. **GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between two frames (t) and (t-1) 
