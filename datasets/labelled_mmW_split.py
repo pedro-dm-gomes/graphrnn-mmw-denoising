@@ -1,6 +1,6 @@
-import os
 import numpy as np
 import random
+import os
 
 def rotate_translate_jitter_pc(pc, angle, x,y,z):
     """
@@ -13,7 +13,6 @@ def rotate_translate_jitter_pc(pc, angle, x,y,z):
 	    px, py, pz = pc[p,0:3]
 	    
 	    # Do via Matrix mutiplication istead
-
 	    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy) + x + (np.random.rand() * (0.05 * 2) - 0.05 )
 	    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy) + y + (np.random.rand() * (0.05 * 2) - 0.05 )
 	    qz = pz + z  + (np.random.rand() * (0.05 * 2) - 0.05 )
@@ -97,6 +96,7 @@ class MMW(object):
                 	npy_run[frame] =  shuffle_pc(npy_run[frame])
                 
                 self.data.append(npy_run)
+            print("Train  data", np.shape(self.data) )
 
          
 

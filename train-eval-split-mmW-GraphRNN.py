@@ -237,14 +237,7 @@ def train():
     gradients = tf.gradients(loss, params)
     clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
     train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
-    if is_training_pl == True :
-	    # Clip gradient
-	    params = tf.trainable_variables()
-    if is_training_pl == False :
-	    #Do not update parameters
-	    params = tf.trainable_variables()
-	    
-    
+
     saver = tf.train.Saver(max_to_keep=4, keep_checkpoint_every_n_hours = 5)
     
     print(" Trainable paramenters: ")
@@ -294,73 +287,76 @@ def train():
 
     
     for epoch in range(ckpt_number, args.num_iters):
-    	sys.stdout.flush()
-    	
-    	# Train one batch
-    	train_one_batch(sess, ops,train_writer, epoch)
-    	
+      sys.stdout.flush()
+     
+      # Train one epoch
+      if (epoch % 0 == 0):
+        train_one_epoch(sess, ops,train_writer, epoch)
+        
     	# Save Checkpoint
-    	if (epoch % args.save_cpk == 0):
-    	  save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
-    	  print("Model saved in file: %s" % save_path)
-    	  #log_string("Model saved in file: %s" % save_path)
-    	  
-    	if (epoch % 5000 == 0):
-    	    	   	  	  
-    	  print(" **  Evalutate Test Data ** ")
-    	  eval_one_epoch(sess, ops, test_writer, epoch)
-
-    	  
-    	  """ Restore After evaluation """
-    	  # Restore Session
-    	  checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
-    	  ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
-    	  print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
-    	  saver.restore(sess, checkpoint_path_automatic)
-    	  ckpt_number=ckpt_number[11:]
-    	  ckpt_number=int(ckpt_number)
-    	  # change random seed
-    	  np.random.seed(ckpt_number)
-    	  tf.set_random_seed(ckpt_number)  
-    	  
-    	  # BUG !
-    	  """
-    	   In the "GraphRNN_OG" the weights are updated during evaluation and reseted after evaluation
-    	   This bug should not happen in "GraphRNN_util" (double check)
-    	   """
-    	  
-    	# Reload Dataset
-    	if (epoch % 500 == 0 and epoch != 0):
-    	  train_dataset = Dataset_mmW(root=args.data_dir,
+      if (epoch % 2 == 0):
+        save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+        print("Model saved in file: %s" % save_path)
+      
+      if (epoch % 5 == 0): 	  	  
+        print(" **  Evalutate Test Data ** ")
+        eval_one_epoch(sess, ops, test_writer, epoch)
+        
+      if (epoch % 10 == 0):
+         print(" **  Evalutate All Test Data ** ")
+         eval_all_test_data(sess, ops, test_writer, epoch)
+       
+    	# BUG !
+      """
+    	In some modules the weights are updated during evaluation and reseted after evaluation
+    	This bug should not happen in "GraphRNN_util" (double check)
+    	"""
+      """ Restore After evaluation """
+      # Restore Session
+      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
+      print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
+      saver.restore(sess, checkpoint_path_automatic)
+      ckpt_number=ckpt_number[11:]
+      ckpt_number=int(ckpt_number)
+      # change random seed
+      np.random.seed(ckpt_number)
+      tf.set_random_seed(ckpt_number)  
+      
+      # Reload Dataset
+      if (epoch % 10 == 0 and epoch != 0):
+        print("[Dataset Reload] ",train_dataset )    	
+        train_dataset = Dataset_mmW(root=args.data_dir,
                         		   seq_length=args.seq_length,
                         		   num_points=args.num_points,
                         		   train=True)
-    	  print("[Dataset Reload] ",train_dataset )    	   	    	  
-    	  
+        
+""" ------------------   """
 
-
-def train_one_batch(sess,ops,train_writer, epoch):
-    """ Train one batch of trainin data """
+def train_one_epoch(sess,ops,train_writer, epoch):
+    """ Train one epoch of training data """
     is_training = True
     
-    # Load Batch Data    
-    batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size)
-    #batch = batch_data
-    batch = np.array(batch_data)
-    input_point_clouds = batch[:,:,:,0:3]
-    input_labels = batch[:,:,:,3:4]
-    
+    #Calculate how many batches are needed to do a full epoch(full train data)
+    total_frames = 0
+    for j in range(0, len(train_dataset) ): total_frames = total_frames +  np.shape(train_dataset.data[j])[0]
+    nr_batches_in_a_epoch = int(total_frames/ ( BATCH_SIZE * SEQ_LENGTH) )
 
-    feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+    for batch_idx in range(0,nr_batches_in_a_epoch):
+      # Load Batch Data at Random 
+      batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
+      batch = np.array(batch_data)
+      input_point_clouds = batch[:,:,:,0:3]
+      input_labels = batch[:,:,:,3:4]
+      
+      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+      pred, summary, step, train_op, loss, accuracy =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc']], feed_dict=feed_dict)
     
-    pred, summary, step, train_op, loss, accuracy =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc']], feed_dict=feed_dict)
-    
-    print("[ %s  %03d ] Loss: %f\t  Accuracy: %f\t"%( args.version, epoch, loss, accuracy) )
-    
-    
-    if (epoch % args.save_summary == 0 ):
-    	train_writer.add_summary(summary, step)
-    
+      print("[ %s  e:%03d ] Loss: %f\t  Accuracy: %f\t"%( args.version, epoch, loss, accuracy) )
+           
+      if (epoch % args.save_summary == 0 ):
+        train_writer.add_summary(summary, step)
+      
 
                  
 def eval_one_epoch(sess,ops,test_writer, epoch):
@@ -369,6 +365,12 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     
     nr_tests = len(test_dataset) 
     num_batches = nr_tests // BATCH_SIZE
+    #print("nr_tests :", nr_tests)
+    #print("BATCH_SIZE:", BATCH_SIZE)
+    #print("num_batches:", num_batches)
+    
+    x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
+    if (BATCH_SIZE not in x): print("[NOT LOADING ALL TEST DATA] - To test the full test data: select a batch size:", x)
 
     total_accuracy =0
     total_loss = 0
@@ -376,7 +378,61 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     Tn =0
     Fp =0
     Fn =0
+    
+    for batch_idx in range(num_batches):
+      start_idx = batch_idx * BATCH_SIZE
+      end_idx = (batch_idx+1) * BATCH_SIZE
+      cur_batch_size = end_idx - start_idx
+      input_point_clouds =[]
+      input_labels =[]
+      
+      for idx  in range(start_idx,end_idx): #sequences to be tested
+        test_seq = test_dataset[idx]   
+        test_seq =np.array(test_seq)
+        point_clouds = test_seq[:,:,0:3]
+        labels = test_seq[:,:,3:4]
+        input_point_clouds.append(point_clouds)
+        input_labels.append(labels)
+      
+      input_point_clouds = np.array(input_point_clouds)
+      input_labels = np.array(input_labels)
+      
+      # Send to model to be evaluated
+      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+      pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
+      test_writer.add_summary(summary, step)  
+      
+      total_accuracy = total_accuracy + accuracy
+      total_loss = total_loss + loss
+      accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
+      Tp = Tp + (true_positives) #it is the same sequence repeated for batch)
+      Fp = Fp + (false_positives)
+      Tn = Tn + (true_negatives)
+      Fn = Fn + (false_negatives)
+            
+    mean_loss = total_loss/ nr_tests
+    mean_accuracy = total_accuracy/ nr_tests
+    precision = Tp / ( Tp+Fp)
+    recall = Tp/(Tp+Fn)
+    f1_score =2 * ( (precision * recall)/(precision+recall) )
+    
+    print('**** EVAL: %03d ****' % (epoch))
+    print("[Mean] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
+    print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
+    print(' -- ')          
+      
 
+                 
+def eval_all_test_data(sess,ops,test_writer, epoch):
+    """ Eval all sequences of test dataset """
+    is_training = False
+    nr_tests = len(test_dataset) 
+    total_accuracy =0
+    total_loss = 0
+    Tp =0 #true positives total
+    Tn =0
+    Fp =0
+    Fn =0
     # Load Test data
     for sequence_nr in range(0,nr_tests):
       test_seq = test_dataset[sequence_nr]    	
@@ -389,26 +445,17 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       # We repeat the same sequence times the number of batches
       input_point_clouds = np.stack((input_point_clouds,) * args.batch_size, axis=0)
       input_labels = np.stack((input_labels,) * BATCH_SIZE, axis=0)
-
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
 
       pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
 
-
-      #print("Loss  Accuracy: \t %f\t  %f\t"%( loss, accuracy) )
-      test_writer.add_summary(summary, step)  
-
-      #Visualize weights
-      #print_weights(sess, params, 16) # FC2 Bias For GraphRNN_OG
-      #print_weights(sess, params, 33) # FC2 Bias For GraphRNN_tf_util
-
       total_accuracy = total_accuracy + accuracy
       total_loss = total_loss + loss
       accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
-      Tp = Tp + (true_positives/num_batches) #it is the same sequence repeated for batch)
-      Fp = Fp + (false_positives/num_batches)
-      Tn = Tn + (true_negatives/num_batches)
-      Fn = Fn + (false_negatives/num_batches)
+      Tp = Tp + (true_positives/BATCH_SIZE) #it is the same sequence repeated for batch)
+      Fp = Fp + (false_positives/BATCH_SIZE)
+      Tn = Tn + (true_negatives/BATCH_SIZE)
+      Fn = Fn + (false_negatives/BATCH_SIZE)
       
     mean_loss = total_loss/ nr_tests
     mean_accuracy = total_accuracy/ nr_tests
@@ -418,16 +465,15 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     
      
     print('**** EVAL: %03d ****' % (epoch))
-    print("[Mean] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
+    print("[ALL TEST DATA] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
     print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')
     
-        
     # Write to File
     #log_string('****  %03d ****' % (epoch))
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
-    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t' % (precision, recall , f1_score))
+    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
 
     
                   

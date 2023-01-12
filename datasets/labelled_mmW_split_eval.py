@@ -59,7 +59,7 @@ class MMW(object):
             		start = start + seq_length
             		end = start + seq_length
             
-            print("self.data", np.shape(self.data) )
+            print("Test  data", np.shape(self.data) )
         
 
     def __len__(self):
