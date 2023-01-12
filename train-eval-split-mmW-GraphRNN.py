@@ -27,9 +27,9 @@ parser.add_argument('--max-gradient-norm', type=float, default=5.0, help='Clip g
 parser.add_argument('--restore-training', type= int , default = 0 , help='restore-training [default: 0=False 1= True]')
 
 """ --  Save  hyperparameters --- """
-parser.add_argument('--save-cpk', type=int, default=500, help='Iterations to save checkpoints [default: 1000]')
-parser.add_argument('--save-summary', type=int, default=30, help='Iterations to update summary [default: 20]')
-parser.add_argument('--save-iters', type=int, default=1000, help='Iterations to save examples [default: 100000]')
+parser.add_argument('--save-cpk', type=int, default=2, help='Iterations to save checkpoints [default: 1000]')
+parser.add_argument('--save-summary', type=int, default=2, help='Iterations to update summary [default: 20]')
+parser.add_argument('--save-iters', type=int, default=2, help='Iterations to save examples [default: 100000]')
 
 """ --  Model  hyperparameters --- """
 parser.add_argument('--model', type=str, default='GraphRNN_cls', help='Simple model or advanced model [default: advanced]')
