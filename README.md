@@ -17,8 +17,8 @@ The path to this folder should be given as input to the network
 
 To train and evaluate specific model and specific graph-rnn module
 
-    python train-eval-split-mmW-GraphRNN --model GraphRNN_cls --graph_module Simple_GraphRNNCell --version r1  --data-dir /Datasets/Labelled_mmW/Rotated_dataset 
-
+    # PointNET Baseline
+    python  train-eval-split-mmW-GraphRNN.py   --version pointnet_v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 64 --out_channels 64 --num-points 200 --seq-length 1 --num-samples 8 --model PointNet_cls --context-frames 0 --restore-training 0
 
 ### Models
 The following  models are provided
