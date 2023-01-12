@@ -9,6 +9,7 @@ import tensorflow as tf
 from datasets.labelled_mmW_split import MMW as Dataset_mmW
 from datasets.labelled_mmW_split_eval import MMW as Dataset_mmW_eval
 import importlib
+from tqdm import tqdm
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
@@ -290,7 +291,8 @@ def train():
       sys.stdout.flush()
      
       # Train one epoch
-      if (epoch % 0 == 0):
+      if (epoch % 1 == 0):
+        print(" **  Train one epoch ** ")
         train_one_epoch(sess, ops,train_writer, epoch)
         
     	# Save Checkpoint
@@ -302,7 +304,7 @@ def train():
         print(" **  Evalutate Test Data ** ")
         eval_one_epoch(sess, ops, test_writer, epoch)
         
-      if (epoch % 10 == 0):
+      if (epoch % 20 == 0):
          print(" **  Evalutate All Test Data ** ")
          eval_all_test_data(sess, ops, test_writer, epoch)
        
@@ -324,7 +326,7 @@ def train():
       tf.set_random_seed(ckpt_number)  
       
       # Reload Dataset
-      if (epoch % 10 == 0 and epoch != 0):
+      if (epoch % 6 == 0 and epoch != 0):
         print("[Dataset Reload] ",train_dataset )    	
         train_dataset = Dataset_mmW(root=args.data_dir,
                         		   seq_length=args.seq_length,
@@ -342,7 +344,7 @@ def train_one_epoch(sess,ops,train_writer, epoch):
     for j in range(0, len(train_dataset) ): total_frames = total_frames +  np.shape(train_dataset.data[j])[0]
     nr_batches_in_a_epoch = int(total_frames/ ( BATCH_SIZE * SEQ_LENGTH) )
 
-    for batch_idx in range(0,nr_batches_in_a_epoch):
+    for batch_idx in tqdm (range(0,nr_batches_in_a_epoch) ):
       # Load Batch Data at Random 
       batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
       batch = np.array(batch_data)
@@ -379,7 +381,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     Fp =0
     Fn =0
     
-    for batch_idx in range(num_batches):
+    for batch_idx in tqdm ( range(num_batches) ):
       start_idx = batch_idx * BATCH_SIZE
       end_idx = (batch_idx+1) * BATCH_SIZE
       cur_batch_size = end_idx - start_idx
@@ -434,7 +436,7 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
     Fp =0
     Fn =0
     # Load Test data
-    for sequence_nr in range(0,nr_tests):
+    for sequence_nr in tqdm (range(0,nr_tests) ):
       test_seq = test_dataset[sequence_nr]    	
       test_seq =np.array(test_seq)
       input_point_clouds = test_seq[:,:,0:3]
@@ -442,7 +444,7 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
 
       #Batch size problem - work around (this shitty way to do it)
       # TO DO:  FIX THIS!!!
-      # We repeat the same sequence times the number of batches
+      # We repeat the same sequence times the number of batches so the network see all the data
       input_point_clouds = np.stack((input_point_clouds,) * args.batch_size, axis=0)
       input_labels = np.stack((input_labels,) * BATCH_SIZE, axis=0)
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
