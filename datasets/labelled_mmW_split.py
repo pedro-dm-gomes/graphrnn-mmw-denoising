@@ -42,9 +42,7 @@ class MMW(object):
         self.data = []
 
         log_nr = 0
-        print(" ===  MMW DATASET AUGUMENTED  ==== ")
         root = root + '/' +str(num_points)
-        print("Root folder", root)
         
         if train:
 
@@ -70,7 +68,7 @@ class MMW(object):
                 file_path = os.path.join(root, run)
                 npy_run = np.load(file_path)
                 #npy_run = npy_run[:, :, :, ]
-                print("[LOAD TRAIN] 70% File_path", file_path)
+                #print("[LOAD TRAIN] 70% File_path", file_path)
                 # print("npy_run", npy_run.shape)
                 npy_run = npy_run[0]
 
@@ -96,7 +94,7 @@ class MMW(object):
                 	npy_run[frame] =  shuffle_pc(npy_run[frame])
                 
                 self.data.append(npy_run)
-            print("Train  data", np.shape(self.data) )
+            #print("Train  data", np.shape(self.data) )
 
          
 

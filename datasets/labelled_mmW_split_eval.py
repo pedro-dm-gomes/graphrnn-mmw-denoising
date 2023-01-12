@@ -15,15 +15,9 @@ class MMW(object):
         self.num_points = num_points
         self.data = []
 
-        # print("seq_length",seq_length)
-        # print("num_points",num_points)
-
         log_nr = 0
         # print(" MMW DATASET ")
         root = root + '/' +str(num_points)
-
-        print("root folder", root)
-
         if not(train):
 
             npy_files = [
@@ -40,10 +34,9 @@ class MMW(object):
             
             # For each run calculate the limit
             for run in npy_files:
-            	#print ("run", run)
             	file_path = os.path.join(root, run)
             	npy_run = np.load(file_path)
-            	print("[LOAD EVAL] 30% File_path", file_path)
+            	#print("[LOAD EVAL] 30% File_path", file_path)
             	npy_run = npy_run[0]
             	
             	# Cut 70% of frames

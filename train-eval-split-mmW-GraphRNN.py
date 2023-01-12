@@ -296,42 +296,42 @@ def train():
         train_one_epoch(sess, ops,train_writer, epoch)
         
     	# Save Checkpoint
-      if (epoch % 2 == 0):
+      if (epoch % 10 == 0):
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
       
-      if (epoch % 5 == 0): 	  	  
+      # Evaluate Test Data
+      if (epoch % 10 == 0): 	  	  
         print(" **  Evalutate Test Data ** ")
         eval_one_epoch(sess, ops, test_writer, epoch)
+        """  BUG! In some modules the weights are updated during evaluation """
+        """ Restore After evaluation """
+        ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
+        print ("\n** Restore from checkpoint ***: ", tf.train.latest_checkpoint(LOG_DIR))
+        saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
+        ckpt_number= int( ckpt_number[11:] )
+        np.random.seed(ckpt_number)
+        tf.set_random_seed(ckpt_number)  
         
-      if (epoch % 20 == 0):
-         print(" **  Evalutate All Test Data ** ")
-         eval_all_test_data(sess, ops, test_writer, epoch)
-       
-    	# BUG !
-      """
-    	In some modules the weights are updated during evaluation and reseted after evaluation
-    	This bug should not happen in "GraphRNN_util" (double check)
-    	"""
-      """ Restore After evaluation """
-      # Restore Session
-      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
-      ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
-      print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
-      saver.restore(sess, checkpoint_path_automatic)
-      ckpt_number=ckpt_number[11:]
-      ckpt_number=int(ckpt_number)
-      # change random seed
-      np.random.seed(ckpt_number)
-      tf.set_random_seed(ckpt_number)  
-      
+      # Evaluate ALL Test Data
+      if (epoch % 50 == 0 and epoch!=0):
+        print(" **  Evalutate All Test Data ** ")
+        eval_all_test_data(sess, ops, test_writer, epoch)
+        """ Restore After evaluation """
+        ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
+        print ("-- Restore from checkpoint: ", tf.train.latest_checkpoint(LOG_DIR))
+        saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
+        ckpt_number= int( ckpt_number[11:] )
+        np.random.seed(ckpt_number)
+        tf.set_random_seed(ckpt_number)  
+    
       # Reload Dataset
       if (epoch % 6 == 0 and epoch != 0):
-        print("[Dataset Reload] ",train_dataset )    	
         train_dataset = Dataset_mmW(root=args.data_dir,
                         		   seq_length=args.seq_length,
                         		   num_points=args.num_points,
                         		   train=True)
+        print("[Dataset Reload/Augumented] ",train_dataset )    	
         
 """ ------------------   """
 
@@ -339,11 +339,13 @@ def train_one_epoch(sess,ops,train_writer, epoch):
     """ Train one epoch of training data """
     is_training = True
     
-    #Calculate how many batches are needed to do a full epoch(full train data)
+    #Calculate how many batches are needed to do "see" the full training data
     total_frames = 0
     for j in range(0, len(train_dataset) ): total_frames = total_frames +  np.shape(train_dataset.data[j])[0]
     nr_batches_in_a_epoch = int(total_frames/ ( BATCH_SIZE * SEQ_LENGTH) )
 
+    avg_epoch_loss =0 
+    avg_epoch_accuracy = 0
     for batch_idx in tqdm (range(0,nr_batches_in_a_epoch) ):
       # Load Batch Data at Random 
       batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
@@ -353,11 +355,15 @@ def train_one_epoch(sess,ops,train_writer, epoch):
       
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
       pred, summary, step, train_op, loss, accuracy =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc']], feed_dict=feed_dict)
+      avg_epoch_loss = avg_epoch_loss + loss
+      avg_epoch_accuracy = avg_epoch_accuracy + accuracy
     
-      print("[ %s  e:%03d ] Loss: %f\t  Accuracy: %f\t"%( args.version, epoch, loss, accuracy) )
+    avg_epoch_loss = avg_epoch_loss/nr_batches_in_a_epoch
+    avg_epoch_accuracy =avg_epoch_accuracy/nr_batches_in_a_epoch
+    print("[ %s  e:%03d ] Loss: %f\t  Accuracy: %f\t"%( args.version, epoch, avg_epoch_loss, avg_epoch_accuracy) )
            
-      if (epoch % args.save_summary == 0 ):
-        train_writer.add_summary(summary, step)
+    if (epoch % args.save_summary == 0 ):
+      train_writer.add_summary(summary, step)
       
 
                  
@@ -407,20 +413,20 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       total_accuracy = total_accuracy + accuracy
       total_loss = total_loss + loss
       accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
-      Tp = Tp + (true_positives) #it is the same sequence repeated for batch)
+      Tp = Tp + (true_positives) 
       Fp = Fp + (false_positives)
       Tn = Tn + (true_negatives)
       Fn = Fn + (false_negatives)
             
-    mean_loss = total_loss/ nr_tests
-    mean_accuracy = total_accuracy/ nr_tests
+    mean_loss = total_loss/ num_batches
+    mean_accuracy = total_accuracy/ num_batches
     precision = Tp / ( Tp+Fp)
     recall = Tp/(Tp+Fn)
     f1_score =2 * ( (precision * recall)/(precision+recall) )
     
     print('**** EVAL: %03d ****' % (epoch))
-    print("[Mean] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
-    print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
+    print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
+    print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')          
       
 
@@ -467,7 +473,7 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
     
      
     print('**** EVAL: %03d ****' % (epoch))
-    print("[ALL TEST DATA] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
+    print("[FULL TEST DATA] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
     print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')
     
