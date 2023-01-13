@@ -94,7 +94,9 @@ class MMW(object):
                 	npy_run[frame] =  shuffle_pc(npy_run[frame])
                 
                 self.data.append(npy_run)
-            #print("Train  data", np.shape(self.data) )
+            
+            print("Train  data", np.shape(self.data) )
+            #exit()
 
          
 
