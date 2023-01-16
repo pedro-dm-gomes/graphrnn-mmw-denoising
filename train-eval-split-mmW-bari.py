@@ -6,8 +6,8 @@ import argparse
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-from datasets.labelled_mmW_split import MMW as Dataset_mmW
-from datasets.labelled_mmW_split_eval import MMW as Dataset_mmW_eval
+from datasets.bari_train_data import MMW as Dataset_mmW
+from datasets.bari_test_data import MMW as Dataset_mmW_eval
 import importlib
 from tqdm import tqdm
 

@@ -17,21 +17,11 @@ class MMW(object):
 
         log_nr = 0
         # print(" MMW DATASET ")
-        root = root + '/' +str(num_points)
+        root = root + '/' +str(num_points)+ '/test'
         if not(train):
 
-            npy_files = [
-                "labels_run_3.npy",
-                "labels_run_4.npy",
-                "labels_run_6.npy",
-                "labels_run_7.npy",
-                "labels_run_8.npy",
-                "labels_run_9.npy",
-                "labels_run_10.npy",
-                "labels_run_11.npy",
-                "labels_run_12.npy",
-            ]
-            
+
+            npy_files = os.listdir(root)
             # For each run calculate the limit
             for run in npy_files:
             	file_path = os.path.join(root, run)
