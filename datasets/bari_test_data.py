@@ -30,8 +30,8 @@ class MMW(object):
             	npy_run = npy_run[0]
             	
             	# Cut 70% of frames
-            	d_len = int(npy_run.shape[0]*0.7)
-            	npy_run = npy_run[d_len:]
+            	#d_len = int(npy_run.shape[0]*0.7)
+            	#npy_run = npy_run[d_len:]
             	
             	run_size = npy_run.shape[0]
             	start = 0

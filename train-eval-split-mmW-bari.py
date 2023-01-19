@@ -287,9 +287,11 @@ def train():
   	   'step': batch}
 
     
+    early_stop_count = 0
+    prev_loss = 0
     for epoch in range(ckpt_number, args.num_iters):
-      sys.stdout.flush()
-     
+      
+      sys.stdout.flush() 
       # Train one epoch
       if (epoch % 1 == 0):
         print(" **  Train one epoch ** ")
@@ -303,7 +305,17 @@ def train():
       # Evaluate Test Data
       if (epoch % 10 == 0): 	  	  
         print(" **  Evalutate Test Data ** ")
-        eval_one_epoch(sess, ops, test_writer, epoch)
+        mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
+        #Manual early stop
+        if mean_loss > prev_loss : 
+          early_stop_count = early_stop_count + 1
+        else:
+          early_stop_count = 0
+        prev_loss = mean_loss
+        if early_stop_count > 10 :
+          print("\n\n---- [EARLY STOP ] -----\n\n")
+          exit()
+        
         """  BUG! In some modules the weights are updated during evaluation """
         """ Restore After evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
@@ -314,7 +326,8 @@ def train():
         tf.set_random_seed(ckpt_number)  
         
       # Evaluate ALL Test Data
-      if (epoch % 50 == 0 and epoch!=0):
+      #if (epoch % 25 == 0 and epoch!=0):
+      if (epoch % 25 == 0 and epoch!=0):  
         print(" **  Evalutate All Test Data ** ")
         eval_all_test_data(sess, ops, test_writer, epoch)
         """ Restore After evaluation """
@@ -323,7 +336,9 @@ def train():
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
         ckpt_number= int( ckpt_number[11:] )
         np.random.seed(ckpt_number)
-        tf.set_random_seed(ckpt_number)  
+        tf.set_random_seed(ckpt_number)
+        
+        
     
       # Reload Dataset
       if (epoch % 6 == 0 and epoch != 0):
@@ -364,6 +379,9 @@ def train_one_epoch(sess,ops,train_writer, epoch):
            
     if (epoch % args.save_summary == 0 ):
       train_writer.add_summary(summary, step)
+      
+    # Early-Stop
+    # To be implemented
       
 
                  
@@ -427,7 +445,9 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     print('**** EVAL: %03d ****' % (epoch))
     print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')          
+    print(' -- ')    
+    
+    return mean_loss        
       
 
                  
