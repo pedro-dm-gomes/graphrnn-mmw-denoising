@@ -297,27 +297,29 @@ def train():
         print(" **  Train one epoch ** ")
         train_one_epoch(sess, ops,train_writer, epoch)
         
-    	# Save Checkpoint
-      if (epoch % 10 == 0):
+      #  Test Data Val 
+      if (epoch % 4 == 0): 	   
+        # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
       
-      # Evaluate Test Data
-      if (epoch % 10 == 0): 	  	  
-        print(" **  Evalutate Test Data ** ")
+        #Evaluate
+        print(" **  Evalutate VAL Data ** ")
         mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
+        
         #Manual early stop
         if mean_loss > prev_loss : 
           early_stop_count = early_stop_count + 1
+          print("[LOSS] INCREASED: +1")
         else:
           early_stop_count = 0
         prev_loss = mean_loss
-        if early_stop_count > 10 :
+        if early_stop_count > 4 :
           print("\n\n---- [EARLY STOP ] -----\n\n")
           exit()
         
+        # Restore Checkpoint
         """  BUG! In some modules the weights are updated during evaluation """
-        """ Restore After evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
         print ("\n** Restore from checkpoint ***: ", tf.train.latest_checkpoint(LOG_DIR))
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
@@ -326,11 +328,13 @@ def train():
         tf.set_random_seed(ckpt_number)  
         
       # Evaluate ALL Test Data
-      #if (epoch % 25 == 0 and epoch!=0):
-      if (epoch % 25 == 0 and epoch!=0):  
+      if (epoch % 50 == 0 and epoch!=0):  
+        # Save Checkpoint
+        save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+        print("Model saved in file: %s" % save_path)
+        
         print(" **  Evalutate All Test Data ** ")
         eval_all_test_data(sess, ops, test_writer, epoch)
-        """ Restore After evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
         print ("-- Restore from checkpoint: ", tf.train.latest_checkpoint(LOG_DIR))
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
@@ -338,8 +342,6 @@ def train():
         np.random.seed(ckpt_number)
         tf.set_random_seed(ckpt_number)
         
-        
-    
       # Reload Dataset
       if (epoch % 6 == 0 and epoch != 0):
         train_dataset = Dataset_mmW(root=args.data_dir,
@@ -379,11 +381,6 @@ def train_one_epoch(sess,ops,train_writer, epoch):
            
     if (epoch % args.save_summary == 0 ):
       train_writer.add_summary(summary, step)
-      
-    # Early-Stop
-    # To be implemented
-      
-
                  
 def eval_one_epoch(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
@@ -447,10 +444,18 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')    
     
+    
+    # Write to File
+    #log_string('****  %03d ****' % (epoch))
+    log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
+    if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
+    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
+
+        
+
     return mean_loss        
       
-
-                 
+                
 def eval_all_test_data(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
     is_training = False
@@ -499,6 +504,7 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
     
     # Write to File
     #log_string('****  %03d ****' % (epoch))
+    log_string(" All test data ")
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
     	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))

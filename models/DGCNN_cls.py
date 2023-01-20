@@ -55,7 +55,6 @@ def get_model(point_cloud, is_training, model_params):
   print("[new] point_cloud.shape", point_cloud.shape)
   
   #Single Frame processing 
-  context_frames = 0
   num_point = num_points
   k =   num_samples
   weight_decay = bn_decay
@@ -65,15 +64,18 @@ def get_model(point_cloud, is_training, model_params):
   nn_idx = tf_util.knn(adj, k=k) # (batch, num_points, k)
   edge_feature = tf_util.get_edge_feature(input_image, nn_idx=nn_idx, k=k)
 
-  out1 = tf_util.conv2d(edge_feature, 64, [1,1],
+  out1 = tf_util.conv2d(edge_feature, 12, [1,1],
                         padding='VALID', stride=[1,1],
                         bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                         scope='adj_conv1', bn_decay=bn_decay, is_dist=True)
+  
   out2 = tf_util.conv2d(out1, 64, [1,1],
                         padding='VALID', stride=[1,1],
                         bn=BN_FLAG, is_training=is_training, weight_decay=weight_decay,
                         scope='adj_conv2', bn_decay=bn_decay, is_dist=True)
 
+
+  # Max - Pooling operation
   net_1 = tf.reduce_max(out2, axis=-2, keep_dims=True)
 
 
@@ -124,17 +126,15 @@ def get_model(point_cloud, is_training, model_params):
                                      net_3])
 
   # CONV 
-  net = tf_util.conv2d(concat, 128, [1,1], padding='VALID', stride=[1,1],
+  net = tf_util.conv2d(concat, 512, [1,1], padding='VALID', stride=[1,1],
              bn=BN_FLAG, is_training=is_training, scope='seg/conv1', is_dist=True)
-  net = tf_util.conv2d(net, 64, [1,1], padding='VALID', stride=[1,1],
+  net = tf_util.conv2d(net, 256, [1,1], padding='VALID', stride=[1,1],
              bn=BN_FLAG, is_training=is_training, scope='seg/conv2', is_dist=True)
   net = tf_util.dropout(net, keep_prob=0.7, is_training=is_training, scope='dp1')
   net = tf_util.conv2d(net, 2, [1,1], padding='VALID', stride=[1,1],
              activation_fn=None, scope='seg/conv3', is_dist=True)
   net = tf.squeeze(net, [2])
   
-  print("net:", net)
-
   predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
   print("predicted_labels", predicted_labels, "\n")
 
@@ -173,7 +173,7 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
     frame_loss = tf.reduce_mean(frame_loss)
     sequence_loss = sequence_loss + frame_loss  	
   	
-  sequence_loss = sequence_loss/(seq_length *batch_size )
+  sequence_loss = sequence_loss/(seq_length )
   return sequence_loss 
   
 
