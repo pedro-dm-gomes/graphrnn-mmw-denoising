@@ -117,12 +117,16 @@ def get_model(point_cloud, is_training, model_params):
                         bn=BN_FLAG, is_training=is_training,
                         scope='conv9', bn_decay=bn_decay)
 
+  print("[1] net", net)
   net = tf_util.conv2d(net, 2, [1,1],
                         padding='VALID', stride=[1,1], activation_fn=None,
                         scope='conv10')
+  
+  print("[2] net", net)
   net = tf.squeeze(net, [2]) # BxNxC
   
-  print("net", net)
+  print("[3] net", net)
+  exit()
   
   predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
   print("predicted_labels", predicted_labels)

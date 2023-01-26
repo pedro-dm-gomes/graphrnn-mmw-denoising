@@ -17,7 +17,6 @@ sys.path.append(os.path.join(ROOT_DIR, 'modules/dgcnn_utils'))
 from pointnet2_color_feat_states import *
 import graph_rnn_modules as modules
 import tf_util
-import tf_util
 from transform_nets import input_transform_net, feature_transform_net
 
 def placeholder_inputs(batch_size, seq_length, num_points):
@@ -65,23 +64,26 @@ def get_model(point_cloud, is_training, model_params):
     
 
   # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=sampled_points_down1, radius=0.2, nsample=num_samples,  mlp=[64,64,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
-  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=sampled_points_down2, radius=0.4, nsample=num_samples, mlp=[128,128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
-  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=sampled_points_down3, radius=None, nsample=num_samples, mlp=[256,256,512], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
+  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=sampled_points_down1, knn= True, radius=0.2, nsample=num_samples,  mlp=[64,64], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
+  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=sampled_points_down2, knn= True, radius=0.4, nsample=num_samples, mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
+  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=sampled_points_down3, knn= True, radius=None, nsample=num_samples, mlp=[256,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
 
   print("l1_points", l1_points)
   print("l2_points", l2_points)
   print("l3_points", l3_points)
   
   # Feature Propagation layers
-  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256,256], is_training, bn_decay, scope='fa_layer1')
-  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [256,128], is_training, bn_decay, scope='fa_layer2')
-  l0_points = pointnet_fp_module(l0_xyz, l1_xyz, None, l1_points, [128,128,128], is_training, bn_decay, scope='fa_layer3')
+  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer1')
+  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer2')
+  l0_points = pointnet_fp_module(l0_xyz, l1_xyz, None, l1_points, [128], is_training, bn_decay, scope='fa_layer3')
 
+  
+  print("l0_points", l0_points)
+  
   # FC layers
-  net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=True, is_training=is_training, scope='fc1', bn_decay=bn_decay)
-  net = tf_util.conv1d(net, 128, 1, padding='VALID', bn=True, is_training=is_training, scope='fc2', bn_decay=bn_decay)
+  net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
   net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope='dp1')
+  net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
   net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
 
   
