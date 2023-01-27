@@ -61,7 +61,9 @@ def get_model(point_cloud, is_training, model_params):
     transform = input_transform_net(point_cloud, is_training, bn_decay, K=3)
   point_cloud_transformed = tf.matmul(point_cloud, transform)
   input_image = tf.expand_dims(point_cloud_transformed, -1)
- 
+  print("input_image", input_image)
+
+  
   net = tf_util.conv2d(input_image, 64, [1,3],
                       padding='VALID', stride=[1,1],
                       bn=BN_FLAG, is_training=is_training,
@@ -112,25 +114,23 @@ def get_model(point_cloud, is_training, model_params):
                         padding='VALID', stride=[1,1],
                         bn=BN_FLAG, is_training=is_training,
                         scope='conv8', bn_decay=bn_decay)
-  net = tf_util.conv2d(net, 50, [1,1],
+  net_last = tf_util.conv2d(net, 50, [1,1],
                         padding='VALID', stride=[1,1],
                         bn=BN_FLAG, is_training=is_training,
                         scope='conv9', bn_decay=bn_decay)
 
-  print("[1] net", net)
-  net = tf_util.conv2d(net, 2, [1,1],
+  net = tf_util.conv2d(net_last, 2, [1,1],
                         padding='VALID', stride=[1,1], activation_fn=None,
                         scope='conv10')
   
-  print("[2] net", net)
   net = tf.squeeze(net, [2]) # BxNxC
+  print("net", net)
   
-  print("[3] net", net)
-  exit()
+  end_points['last_d_feat'] = net_last 
+  end_points['points'] = point_cloud 
   
   predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
   print("predicted_labels", predicted_labels)
-
   return predicted_labels, end_points
        
 

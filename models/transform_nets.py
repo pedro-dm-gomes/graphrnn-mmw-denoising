@@ -33,12 +33,14 @@ def input_transform_net(point_cloud, is_training, bn_decay=None, K=3):
                          scope='tconv3', bn_decay=bn_decay)
     net = tf_util.max_pool2d(net, [num_point,1],
                              padding='VALID', scope='tmaxpool')
-
+    
     net = tf.reshape(net, [batch_size, -1])
+    
     net = tf_util.fully_connected(net, 512, bn=True, is_training=is_training,
                                   scope='tfc1', bn_decay=bn_decay)
     net = tf_util.fully_connected(net, 256, bn=True, is_training=is_training,
                                   scope='tfc2', bn_decay=bn_decay)
+
 
     with tf.variable_scope('transform_XYZ') as sc:
         assert(K==3)
