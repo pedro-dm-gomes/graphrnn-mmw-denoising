@@ -77,7 +77,7 @@ def get_model(point_cloud, is_training, model_params):
     
 
   # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int( (num_points*seq_length) /sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
+  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int( (num_points*seq_length)/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
   l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int( (num_points*seq_length)/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
   l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int( (num_points*seq_length)/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
 

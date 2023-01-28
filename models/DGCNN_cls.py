@@ -65,11 +65,17 @@ def get_model(point_cloud, is_training, model_params):
   nn_idx = tf_util.knn(adj, k=k)
   edge_feature = tf_util.get_edge_feature(input_image, nn_idx=nn_idx, k=k)
 
+  print("edge_feature", edge_feature)
+  
   with tf.variable_scope('transform_net1') as sc:
-    transform = input_transform_net(edge_feature, is_training, bn_decay, K=3)
+    transform = feature_transform_net(edge_feature, is_training, bn_decay, K=3)
+  
+  print("transform", transform)
+  
   point_cloud_transformed = tf.matmul(point_cloud, transform)
   
-  input_image = tf.expand_dims(point_cloud_transformed, -1)
+  print("point_cloud_transformed", point_cloud_transformed)
+  
   adj = tf_util.pairwise_distance(point_cloud_transformed)
   nn_idx = tf_util.knn(adj, k=k)
   edge_feature = tf_util.get_edge_feature(input_image, nn_idx=nn_idx, k=k)
@@ -85,7 +91,7 @@ def get_model(point_cloud, is_training, model_params):
                        scope='adj_conv2', bn_decay=bn_decay, is_dist=True)
 
   net_1 = tf.reduce_max(out2, axis=-2, keep_dims=True)
-
+  print("net_1", net_1)
 
 
   adj = tf_util.pairwise_distance(net_1)
@@ -164,7 +170,7 @@ def get_model(point_cloud, is_training, model_params):
   predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
   print("predicted_labels", predicted_labels, "\n")
   
-  exit()
+  #exit()
 
   return predicted_labels, end_points
        
