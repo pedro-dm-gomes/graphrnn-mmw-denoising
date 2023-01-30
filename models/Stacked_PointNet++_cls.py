@@ -76,8 +76,17 @@ def get_model(point_cloud, is_training, model_params):
   print("l0_points", l0_points)
     
 
+  with tf.variable_scope('transform_net1') as sc:
+    transform = input_transform_net(point_cloud, is_training, bn_decay, K=3)
+  point_cloud_transformed = tf.matmul(point_cloud, transform)
+  l0_transformed = point_cloud_transformed
+  #l0_transformed = tf.expand_dims(point_cloud_transformed)
+  
+  print("l0_transformed", l0_transformed)
+  
+  
   # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int( (num_points*seq_length)/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
+  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_transformed, l0_points, npoint=int( (num_points*seq_length)/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
   l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int( (num_points*seq_length)/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
   l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int( (num_points*seq_length)/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
 
@@ -88,7 +97,7 @@ def get_model(point_cloud, is_training, model_params):
   # Feature Propagation layers
   l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer1')
   l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer2')
-  l0_points = pointnet_fp_module(l0_xyz, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
+  l0_points = pointnet_fp_module(l0_transformed, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
 
   l0_points = tf.concat( (l0_points,timestep_tensor), axis = 2)
   print("l2_points", l2_points)

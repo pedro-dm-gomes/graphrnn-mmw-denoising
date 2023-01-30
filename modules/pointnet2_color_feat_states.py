@@ -234,25 +234,28 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, group_al
             idx: (batch_size, npoint, nsample) int32 -- indices for local regions
     '''
     data_format = 'NCHW' if use_nchw else 'NHWC'
+    
     with tf.variable_scope(scope) as sc:
         # Sample and Grouping
         if group_all:
             nsample = xyz.get_shape()[1].value
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_all(xyz, points, use_xyz)
         else:
-            #original code
+            #original PointNET++ code
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_original(npoint, radius, nsample, xyz, points, knn, use_xyz)
             #changed code
             #new_xyz, new_color, new_points, new_states, idx, grouped_xyz = sample_and_group(npoint, radius, nsample, xyz, xyz, points, xyz, knn, use_xyz)
 
+
         # Point Feature Embedding
-        if use_nchw: new_points = tf.transpose(new_points, [0,3,1,2])
+        #if use_nchw: new_points = tf.transpose(new_points, [0,3,1,2])
         for i, num_out_channel in enumerate(mlp):
             new_points = tf_util.conv2d(new_points, num_out_channel, [1,1],
                                         padding='VALID', stride=[1,1],
                                         bn=bn, is_training=is_training,
-                                        scope='conv%d'%(i), bn_decay=bn_decay) # remove data format
-        if use_nchw: new_points = tf.transpose(new_points, [0,2,3,1])
+                                        scope='conv%d'%(i), bn_decay=bn_decay)
+
+        #if use_nchw: new_points = tf.transpose(new_points, [0,2,3,1])
 
         # Pooling in Local Regions
         if pooling=='max':
@@ -283,6 +286,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, group_al
             if use_nchw: new_points = tf.transpose(new_points, [0,2,3,1])
 
         new_points = tf.squeeze(new_points, [2]) # (batch_size, npoints, mlp2[-1])
+        
         return new_xyz, new_points, idx
     
 
@@ -297,6 +301,7 @@ def pointnet_fp_module(xyz1, xyz2, points1, points2, mlp, is_training, bn_decay,
         Return:
             new_points: (batch_size, ndataset1, mlp[-1]) TF tensor
     '''
+    #print("--- FP module ---")
     with tf.variable_scope(scope) as sc:
         dist, idx = three_nn(xyz1, xyz2)
         dist = tf.maximum(dist, 1e-10)
@@ -309,12 +314,16 @@ def pointnet_fp_module(xyz1, xyz2, points1, points2, mlp, is_training, bn_decay,
             new_points1 = tf.concat(axis=2, values=[interpolated_points, points1]) # B,ndataset1,nchannel1+nchannel2
         else:
             new_points1 = interpolated_points
+        
         new_points1 = tf.expand_dims(new_points1, 2)
         for i, num_out_channel in enumerate(mlp):
             new_points1 = tf_util.conv2d(new_points1, num_out_channel, [1,1],
                                          padding='VALID', stride=[1,1],
                                          bn=bn, is_training=is_training,
                                          scope='conv_%d'%(i), bn_decay=bn_decay)
+            
+            #print("new_points1", new_points1)
+            
         new_points1 = tf.squeeze(new_points1, [2]) # B,ndataset1,mlp[-1]
         return new_points1
 

@@ -34,16 +34,16 @@ parser.add_argument('--save-iters', type=int, default=2, help='Iterations to sav
 """ --  Model  hyperparameters --- """
 parser.add_argument('--model', type=str, default='GraphRNN_cls', help='Simple model or advanced model [default: advanced]')
 parser.add_argument('--graph_module', type=str, default='Simple_GraphRNNCell', help='Simple model or advanced model [default: Simple_GraphRNNCell]')
-parser.add_argument('--out_channels', type=int, default=32, help='Dimension of feat [default: 64]')
-parser.add_argument('--num-samples', type=int, default=4, help='Number of samples [default: 4]')
+parser.add_argument('--out_channels', type=int, default=64, help='Dimension of feat [default: 64]')
+parser.add_argument('--num-samples', type=int, default=8, help='Number of samples [default: 4]')
 parser.add_argument('--seq-length', type=int, default=30, help='Length of sequence [default: 30]')
 parser.add_argument('--num-points', type=int, default=200, help='Number of points [default: 1000]')
 parser.add_argument('--step-length', type=float, default=0.1, help='Step length [default: 0.1]')
 parser.add_argument('--log-dir', default='outputs', help='Log dir [default: outputs/mmw]')
 parser.add_argument('--version', default='v0', help='Model version')
-parser.add_argument('--down-points1', type= int , default = 2 , help='[default:2 #points layer 1')
-parser.add_argument('--down-points2', type= int , default = 2*2 , help='[default:2 #points layer 2')
-parser.add_argument('--down-points3', type= int , default = 2*2*2, help='[default:2 #points layer 3')
+parser.add_argument('--down-points1', type= int , default = 1 , help='[default:2 #points layer 1')
+parser.add_argument('--down-points2', type= int , default = 2 , help='[default:2 #points layer 2')
+parser.add_argument('--down-points3', type= int , default = 4, help='[default:2 #points layer 3')
 parser.add_argument('--context-frames', type= int , default = 1, help='[default:1 #contex framres')
 
 """ --  Additional  hyperparameters --- """
@@ -155,7 +155,6 @@ def print_weights(sess, params, layer_nr):
     layers = np.array(params)
     layers = layers[layer_nr]
     W = layers#[layer_nr]
-    print("W", W)
     print("Layer[",layer_nr, "]", W, "\n")    
 
 def get_batch(dataset, batch_size):
@@ -215,9 +214,9 @@ def train():
   	   	    'bn_decay':bn_decay,
   	   	    'out_channels':args.out_channels,
   	   	    'drop_rate': args.drop_rate,
-  	   	    'sampled_points_down1':args.num_points/(args.down_points1),
-  	   	    'sampled_points_down2':args.num_points/(args.down_points2),
-  	   	    'sampled_points_down3':args.num_points/(args.down_points3)}
+  	   	    'sampled_points_down1':args.down_points1,
+  	   	    'sampled_points_down2':args.down_points2,
+  	   	    'sampled_points_down3':args.down_points3}
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
     
@@ -307,7 +306,8 @@ def train():
         print(" **  Evalutate VAL Data ** ")
         mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
         
-        #Manual early stop
+      
+        
         if mean_loss > prev_loss : 
           early_stop_count = early_stop_count + 1
           print("[LOSS] INCREASED: +1")
@@ -432,7 +432,8 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       Fp = Fp + (false_positives)
       Tn = Tn + (true_negatives)
       Fn = Fn + (false_negatives)
-            
+  
+                   
     mean_loss = total_loss/ num_batches
     mean_accuracy = total_accuracy/ num_batches
     precision = Tp / ( Tp+Fp)
@@ -442,7 +443,11 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     print('**** EVAL: %03d ****' % (epoch))
     print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')    
+    print(' -- ')   
+    
+    """ Visualize weights in terminal """
+    #print_weights(sess, params, 82)
+
     
     
     # Write to File
