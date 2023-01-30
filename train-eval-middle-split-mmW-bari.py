@@ -6,8 +6,8 @@ import argparse
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-from datasets.labelled_mmW_split import MMW as Dataset_mmW
-from datasets.labelled_mmW_split_eval import MMW as Dataset_mmW_eval
+from datasets.bari_train_data_middle_split import MMW as Dataset_mmW
+from datasets.bari_test_data_middle_split import MMW as Dataset_mmW_eval
 import importlib
 from tqdm import tqdm
 
@@ -19,7 +19,7 @@ sys.path.append(os.path.join(BASE_DIR, 'models'))
 parser = argparse.ArgumentParser()
 """ --  Training  hyperparameters --- """
 parser.add_argument('--gpu', default='0', help='Select GPU to run code [default: 0]')
-parser.add_argument('--data-dir', default='/home/uceepdg/profile.V6/Desktop/Datasets/mmW/interpolated_dataset', help='Dataset directory')
+parser.add_argument('--data-dir', default='/home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset', help='Dataset directory')
 parser.add_argument('--batch-size', type=int, default=8, help='Batch Size during training [default: 16]')
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
 parser.add_argument('--learning-rate', type=float, default=1e-4, help='Learning rate [default: 1e-4]')
@@ -34,16 +34,16 @@ parser.add_argument('--save-iters', type=int, default=2, help='Iterations to sav
 """ --  Model  hyperparameters --- """
 parser.add_argument('--model', type=str, default='GraphRNN_cls', help='Simple model or advanced model [default: advanced]')
 parser.add_argument('--graph_module', type=str, default='Simple_GraphRNNCell', help='Simple model or advanced model [default: Simple_GraphRNNCell]')
-parser.add_argument('--out_channels', type=int, default=32, help='Dimension of feat [default: 64]')
-parser.add_argument('--num-samples', type=int, default=4, help='Number of samples [default: 4]')
+parser.add_argument('--out_channels', type=int, default=64, help='Dimension of feat [default: 64]')
+parser.add_argument('--num-samples', type=int, default=8, help='Number of samples [default: 4]')
 parser.add_argument('--seq-length', type=int, default=30, help='Length of sequence [default: 30]')
-parser.add_argument('--num-points', type=int, default=1000, help='Number of points [default: 1000]')
+parser.add_argument('--num-points', type=int, default=200, help='Number of points [default: 1000]')
 parser.add_argument('--step-length', type=float, default=0.1, help='Step length [default: 0.1]')
 parser.add_argument('--log-dir', default='outputs', help='Log dir [default: outputs/mmw]')
-parser.add_argument('--version', default='v0', help='Model version')
-parser.add_argument('--down-points1', type= int , default = 2 , help='[default:2 #points layer 1')
-parser.add_argument('--down-points2', type= int , default = 2*2 , help='[default:2 #points layer 2')
-parser.add_argument('--down-points3', type= int , default = 2*2*2, help='[default:2 #points layer 3')
+parser.add_argument('--version', default='spam', help='Model version')
+parser.add_argument('--down-points1', type= int , default = 1 , help='[default:2 #points layer 1')
+parser.add_argument('--down-points2', type= int , default = 2 , help='[default:2 #points layer 2')
+parser.add_argument('--down-points3', type= int , default = 4, help='[default:2 #points layer 3')
 parser.add_argument('--context-frames', type= int , default = 1, help='[default:1 #contex framres')
 
 """ --  Additional  hyperparameters --- """
@@ -52,7 +52,7 @@ parser.add_argument('--decay_step', type=int, default=200000, help='Decay step f
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
 
-print("\n ==== GRAPH-RNN for MMW DATASET FOR POINT CLASSIFICATION  ====== \n")
+print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
 np.random.seed(999)
@@ -155,7 +155,6 @@ def print_weights(sess, params, layer_nr):
     layers = np.array(params)
     layers = layers[layer_nr]
     W = layers#[layer_nr]
-    print("W", W)
     print("Layer[",layer_nr, "]", W, "\n")    
 
 def get_batch(dataset, batch_size):
@@ -215,9 +214,9 @@ def train():
   	   	    'bn_decay':bn_decay,
   	   	    'out_channels':args.out_channels,
   	   	    'drop_rate': args.drop_rate,
-  	   	    'sampled_points_down1':args.num_points/(args.down_points1),
-  	   	    'sampled_points_down2':args.num_points/(args.down_points2),
-  	   	    'sampled_points_down3':args.num_points/(args.down_points3)}
+  	   	    'sampled_points_down1':args.down_points1,
+  	   	    'sampled_points_down2':args.down_points2,
+  	   	    'sampled_points_down3':args.down_points3}
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
     
@@ -287,25 +286,40 @@ def train():
   	   'step': batch}
 
     
+    early_stop_count = 0
+    prev_loss = 0
     for epoch in range(ckpt_number, args.num_iters):
-      sys.stdout.flush()
-     
+      
+      sys.stdout.flush() 
       # Train one epoch
       if (epoch % 1 == 0):
         print(" **  Train one epoch ** ")
         train_one_epoch(sess, ops,train_writer, epoch)
         
-    	# Save Checkpoint
-      if (epoch % 10 == 0):
+      #  Test Data Val 
+      if (epoch % 4 == 0): 	   
+        # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
       
-      # Evaluate Test Data
-      if (epoch % 10 == 0): 	  	  
-        print(" **  Evalutate Test Data ** ")
-        eval_one_epoch(sess, ops, test_writer, epoch)
+        #Evaluate
+        print(" **  Evalutate VAL Data ** ")
+        mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
+        
+      
+        
+        if mean_loss > prev_loss : 
+          early_stop_count = early_stop_count + 1
+          print("[LOSS] INCREASED: +1")
+        else:
+          early_stop_count = 0
+        prev_loss = mean_loss
+        if early_stop_count > 4 :
+          print("\n\n---- [EARLY STOP ] -----\n\n")
+          exit()
+        
+        # Restore Checkpoint
         """  BUG! In some modules the weights are updated during evaluation """
-        """ Restore After evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
         print ("\n** Restore from checkpoint ***: ", tf.train.latest_checkpoint(LOG_DIR))
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
@@ -314,17 +328,20 @@ def train():
         tf.set_random_seed(ckpt_number)  
         
       # Evaluate ALL Test Data
-      if (epoch % 50 == 0 and epoch!=0):
+      if (epoch % 50 == 0 and epoch!=0):  
+        # Save Checkpoint
+        save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+        print("Model saved in file: %s" % save_path)
+        
         print(" **  Evalutate All Test Data ** ")
         eval_all_test_data(sess, ops, test_writer, epoch)
-        """ Restore After evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
         print ("-- Restore from checkpoint: ", tf.train.latest_checkpoint(LOG_DIR))
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
         ckpt_number= int( ckpt_number[11:] )
         np.random.seed(ckpt_number)
-        tf.set_random_seed(ckpt_number)  
-    
+        tf.set_random_seed(ckpt_number)
+        
       # Reload Dataset
       if (epoch % 6 == 0 and epoch != 0):
         train_dataset = Dataset_mmW(root=args.data_dir,
@@ -364,8 +381,6 @@ def train_one_epoch(sess,ops,train_writer, epoch):
            
     if (epoch % args.save_summary == 0 ):
       train_writer.add_summary(summary, step)
-      
-
                  
 def eval_one_epoch(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
@@ -417,7 +432,8 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       Fp = Fp + (false_positives)
       Tn = Tn + (true_negatives)
       Fn = Fn + (false_negatives)
-            
+  
+                   
     mean_loss = total_loss/ num_batches
     mean_accuracy = total_accuracy/ num_batches
     precision = Tp / ( Tp+Fp)
@@ -427,10 +443,24 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     print('**** EVAL: %03d ****' % (epoch))
     print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')          
-      
+    print(' -- ')   
+    
+    """ Visualize weights in terminal """
+    #print_weights(sess, params, 82)
 
-                 
+    
+    
+    # Write to File
+    #log_string('****  %03d ****' % (epoch))
+    log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
+    if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
+    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
+
+        
+
+    return mean_loss        
+      
+                
 def eval_all_test_data(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
     is_training = False
@@ -479,6 +509,7 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
     
     # Write to File
     #log_string('****  %03d ****' % (epoch))
+    log_string(" All test data ")
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
     	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
