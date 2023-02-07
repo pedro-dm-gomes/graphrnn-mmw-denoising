@@ -39,6 +39,7 @@ class MMW(object):
 
         self.seq_length = seq_length
         self.num_points = num_points
+        #print("num_points:", num_points)
         self.data = []
 
         log_nr = 0
@@ -60,7 +61,7 @@ class MMW(object):
                 npy_run = np.load(file_path)
                 #npy_run = npy_run[:, :, :, ]
                 #print("[LOAD TRAIN] 70% File_path", file_path)
-                # print("npy_run", npy_run.shape)
+                #print("npy_run", npy_run.shape)
                 npy_run = npy_run[0]
 
                 

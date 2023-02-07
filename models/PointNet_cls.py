@@ -163,6 +163,7 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
     labels = tf.cast(labels, tf.int32)
 
     frame_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    
     frame_loss = tf.reduce_mean(frame_loss)
     sequence_loss = sequence_loss + frame_loss  	
   	
@@ -170,4 +171,54 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
   return sequence_loss 
   
 
- 
+def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
+
+  """ Calculate balanced loss 
+   inputs: predicted labels : 
+   	   ground_truth_labels: (batch, seq_length, num_points, 1)
+   	   predicted_labels : (batch,seq_length, num_points, 2
+  """
+  batch_size = ground_truth_labels.get_shape()[0].value
+  seq_length = ground_truth_labels.get_shape()[1].value
+  num_points = ground_truth_labels.get_shape()[2].value
+  
+  # Convert labels to a list - This can be improved but it works
+  ground_truth_labels = tf.split(value = ground_truth_labels , num_or_size_splits=seq_length, axis=1)
+  ground_truth_labels = [tf.squeeze(input=label, axis=[1]) for label in ground_truth_labels] 
+  
+  predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
+  predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
+  
+  sequence_loss = 0
+  #Calculate loss frame by frame
+  for frame in range(context_frames,seq_length ):
+    logits = predicted_labels[frame]
+    labels = ground_truth_labels[frame]
+
+    logits = tf.reshape(logits, [batch_size * num_points , 2])
+    labels = tf.reshape(labels, [batch_size*num_points ,])
+    labels = tf.cast(labels, tf.int32)
+
+    #print("--- Normal Classification ---")
+    frame_loss =0
+    frame_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    frame_loss = tf.cast(frame_loss, tf.float32)
+    
+    labels = tf.cast(labels, tf.float32)
+    print("---Weighted Classification ---")
+    mask_0 = tf.where(labels < 0.5, tf.ones_like(labels), tf.zeros_like(labels))  # 0 -Noise points
+    mask_1 = tf.where(labels > 0.5, tf.ones_like(labels), tf.zeros_like(labels))  # 1 -Clean points
+    mask_0 = tf.cast(mask_0, tf.float32)
+    mask_1 = tf.cast(mask_1, tf.float32)
+    
+    print("mask_0", mask_0)
+    print("frame_loss", frame_loss)
+    frame_loss_0 = frame_loss * mask_0 * 0.5 # worth less
+    frame_loss_1 = frame_loss * mask_1 * 1.5 # worth more
+    frame_loss = frame_loss_0 + frame_loss_1
+
+    frame_loss = tf.reduce_mean(frame_loss)
+    sequence_loss = sequence_loss + frame_loss  	
+  	
+  sequence_loss = sequence_loss/(seq_length)
+  return sequence_loss  

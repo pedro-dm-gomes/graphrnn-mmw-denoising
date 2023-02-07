@@ -51,7 +51,7 @@ parser.add_argument('--bn_flag', type=int, default=1, help='Do batch normalizati
 parser.add_argument('--decay_step', type=int, default=200000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
-parser.add_argument('--regularizer_scale', type=float, default=0.0, help='Regulaizer value[default: 0.0- or 0.001]') 
+parser.add_argument('--regularizer_scale', type=float, default=0.01, help='Regulaizer value[default: 0.0- or 0.001]') 
 print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
@@ -202,6 +202,7 @@ def train():
     print("pointclouds_pl", pointclouds_pl)
     print("labels_pl", labels_pl)
     print("is_training_pl:", is_training_pl)
+    #
 
     batch = tf.Variable(0)
     bn_decay = get_bn_decay(batch) 
@@ -220,13 +221,16 @@ def train():
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
     
-
+    # Normal Loss
     loss = MODEL.get_loss(pred, labels_pl, context_frames = model_params['context_frames'])
+    # Balanced Loss
+    #loss = MODEL.get_balanced_loss(pred, labels_pl, context_frames = model_params['context_frames'])
     tf.summary.scalar('loss', loss)
     
   
     # Manual regulaizer -force all the trainbale weights to be small
     regularizer_scale = args.regularizer_scale
+    regularizer_alpha = 1
     print("regularizer_scale", regularizer_scale)
     params_to_be_regulaized = []
     params = tf.trainable_variables()
@@ -237,13 +241,13 @@ def train():
 
     regularizer = tf.contrib.layers.l2_regularizer(regularizer_scale)
     reg_term = tf.contrib.layers.apply_regularization(regularizer,params_to_be_regulaized)
-    print("reg_term", reg_term)
-    tf.summary.scalar('reg_term', reg_term)
+    #print("reg_term", reg_term)
+    #tf.summary.scalar('reg_term', reg_term)
     
     reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
     reg_losses= sum(reg_losses)
     tf.summary.scalar('reg_losses', reg_losses  )
-    loss =  loss + reg_losses
+    loss =  loss + regularizer_alpha * reg_losses
   
     # Calculate accuracy tensor
     accuracy = get_acurracy_tensor(pred, labels_pl,BATCH_SIZE,SEQ_LENGTH, NUM_POINTS, context_frames = model_params['context_frames'])
@@ -254,7 +258,6 @@ def train():
     #learning_rate = BASE_LEARNING_RATE
     tf.summary.scalar('learning_rate', learning_rate)
   
-   
     gradients = tf.gradients(loss, params)
     clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
     train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
@@ -329,8 +332,7 @@ def train():
         print(" **  Evalutate VAL Data ** ")
         mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
         
-      
-        
+    
         if mean_loss > prev_loss : 
           early_stop_count = early_stop_count + 1
           print("[LOSS] INCREASED: +1")

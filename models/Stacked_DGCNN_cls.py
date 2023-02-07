@@ -3,8 +3,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 """
-Implement a PointNet Architecture like the paper
-
+Implement a DGCNN Architecture 
 """
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +15,7 @@ sys.path.append(os.path.join(ROOT_DIR, 'modules/dgcnn_utils'))
 
 from pointnet2_color_feat_states import *
 import graph_rnn_modules as modules
+import tf_util
 import tf_util
 from transform_nets import input_transform_net, feature_transform_net
 
@@ -29,7 +29,7 @@ def placeholder_inputs(batch_size, seq_length, num_points):
   
 def get_model(point_cloud, is_training, model_params):
   
-  """ Classification PointNet, input is BxNx3, output BxNx2 """
+  """ Classification DGCNNNet, input is BxNx3, output BxNx2 """
   # Get model parameters
   batch_size = point_cloud.get_shape()[0].value
   seq_length =point_cloud.get_shape()[1].value
@@ -39,6 +39,7 @@ def get_model(point_cloud, is_training, model_params):
   context_frames = model_params['context_frames']
   sampled_points_down1 = model_params['sampled_points_down1'] #not used
   sampled_points_down2 = model_params['sampled_points_down2'] #not used
+  
   sampled_points_down3 = model_params['sampled_points_down3'] #not used
   BN_FLAG = model_params['BN_FLAG']
   bn_decay = model_params['bn_decay']
@@ -46,30 +47,28 @@ def get_model(point_cloud, is_training, model_params):
   drop_rate = model_params['drop_rate']
   graph_module_name = model_params['graph_module']
   end_points = {}
-  
-  #No Warm up Frames
-  context_frames = 0
-  num_point = num_points
+  original_num_points =num_points
   k =   num_samples
   weight_decay = bn_decay
+  input_image = tf.expand_dims(point_cloud, -1) 
   
-  print("[Load Module]: ",graph_module_name) # PointNET++
-  
-  # Reshape point cloud into a single point cloud
-  print("point_cloud.shape", point_cloud.shape)
+  print("[Load Module]: DGCNN") # DGCNN
+
   # Add relative time-stamp to to point cloud
-  timestep_tensor = tf.zeros( (batch_size,1,num_points,1) )
+  timestep_tensor = tf.zeros( (batch_size,1,original_num_points,1) )
   for f in range(1, seq_length):
-    frame_tensor = tf.ones( (batch_size,1,num_points,1) ) * f
+    frame_tensor = tf.ones( (batch_size,1,original_num_points,1) ) * f
     timestep_tensor = tf.concat( (timestep_tensor, frame_tensor) , axis = 1 )
     
-  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * num_points, 3) )
-  timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *num_points, 1) )
+  num_points = original_num_points *seq_length
+  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * original_num_points, 3) )
+  timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *original_num_points, 1) )
   print("timestep_tensor.shape", timestep_tensor.shape)
   print("point_cloud.shape", point_cloud.shape)
   input_image = tf.expand_dims(point_cloud, -1) 
   print("input_image", input_image)
   
+
   adj = tf_util.pairwise_distance(point_cloud)
   nn_idx = tf_util.knn(adj, k=k)
   edge_feature = tf_util.get_edge_feature(input_image, nn_idx=nn_idx, k=k)
@@ -144,7 +143,7 @@ def get_model(point_cloud, is_training, model_params):
                        bn=True, is_training=is_training,
                        scope='adj_conv7', bn_decay=bn_decay, is_dist=True)
 
-  out_max = tf_util.max_pool2d(out7, [num_point, 1], padding='VALID', scope='maxpool')
+  out_max = tf_util.max_pool2d(out7, [num_points, 1], padding='VALID', scope='maxpool')
   print("out_max:",out_max )
 
   """
@@ -155,8 +154,8 @@ def get_model(point_cloud, is_training, model_params):
                        scope='one_hot_label_expand', bn_decay=bn_decay, is_dist=True)
   out_max = tf.concat(axis=3, values=[out_max, one_hot_label_expand])
   """
-  expand = tf.tile(out_max, [1, num_point, 1, 1])
- 
+  expand = tf.tile(out_max, [1, num_points, 1, 1])
+  print("expand", expand) 
   concat = tf.concat(axis=3, values=[expand, 
                                      net_1,
                                      net_2,
@@ -176,13 +175,12 @@ def get_model(point_cloud, is_training, model_params):
   print("net2", net2.shape)
   net = tf.squeeze(net2, [2])
   
-  predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
+  predicted_labels = tf.reshape(net, (batch_size,seq_length,original_num_points, 2) )
   print("predicted_labels", predicted_labels, "\n")
   
   #exit()
 
   return predicted_labels, end_points
-       
        
 
 def get_loss(predicted_labels, ground_truth_labels, context_frames):

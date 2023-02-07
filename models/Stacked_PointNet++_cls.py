@@ -29,7 +29,7 @@ def placeholder_inputs(batch_size, seq_length, num_points):
   
 def get_model(point_cloud, is_training, model_params):
   
-  """ Classification PointNet, input is BxNx3, output BxNx2 """
+  """ Classification Stacked PointNET++, input is BxNx3, output BxNx2 """
   # Get model parameters
   batch_size = point_cloud.get_shape()[0].value
   seq_length =point_cloud.get_shape()[1].value
@@ -47,31 +47,29 @@ def get_model(point_cloud, is_training, model_params):
   graph_module_name = model_params['graph_module']
   end_points = {}
   
-  #No Warm up Frames
+  #Stacked Frame processing
   context_frames = 0
+  original_num_points =num_points
   
   print("[Load Module]: ",graph_module_name) # PointNET++
   
-  # Reshape point cloud into a single point cloud
-  print("point_cloud.shape", point_cloud.shape)
+  
   # Add relative time-stamp to to point cloud
-  timestep_tensor = tf.zeros( (batch_size,1,num_points,1) )
+  timestep_tensor = tf.zeros( (batch_size,1,original_num_points,1) )
   for f in range(1, seq_length):
-    frame_tensor = tf.ones( (batch_size,1,num_points,1) ) * f
+    frame_tensor = tf.ones( (batch_size,1,original_num_points,1) ) * f
     timestep_tensor = tf.concat( (timestep_tensor, frame_tensor) , axis = 1 )
     
-  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * num_points, 3) )
-  timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *num_points, 1) )
-  print("timestep_tensor.shape", timestep_tensor.shape)
+      
+  num_points = original_num_points *seq_length
+  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * original_num_points, 3) )
+  timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *original_num_points, 1) )
   print("point_cloud.shape", point_cloud.shape)
   
   #### PointNET ++ 
   #l0_xyz = tf.slice(point_cloud, [0,0,0], [-1,-1,3])
   l0_xyz = point_cloud
-  
-  # the initial feature of the point is the con
-  l0_points = timestep_tensor
-  
+  l0_points = timestep_tensor #tf.zeros(l0_xyz.shape) 
   print("l0_xyz", l0_xyz)
   print("l0_points", l0_points)
     
@@ -84,11 +82,10 @@ def get_model(point_cloud, is_training, model_params):
   
   print("l0_transformed", l0_transformed)
   
-  
   # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_transformed, l0_points, npoint=int( (num_points*seq_length)/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
-  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int( (num_points*seq_length)/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
-  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int( (num_points*seq_length)/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
+  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_transformed, l0_transformed, npoint=int(num_points/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
+  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(num_points/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
+  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int(num_points/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
 
   print("l1_points", l1_points)
   print("l2_points", l2_points)
@@ -97,12 +94,14 @@ def get_model(point_cloud, is_training, model_params):
   # Feature Propagation layers
   l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer1')
   l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer2')
-  l0_points = pointnet_fp_module(l0_transformed, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
+  l0_points = pointnet_fp_module(l0_transformed, l1_xyz, l0_transformed, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
 
-  l0_points = tf.concat( (l0_points,timestep_tensor), axis = 2)
+  
   print("l2_points", l2_points)
   print("l1_points", l1_points)
   print("l0_points", l0_points)
+  
+
   
   # FC layers
   net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
@@ -112,7 +111,7 @@ def get_model(point_cloud, is_training, model_params):
   
   print("net", net)
   end_points['feats'] = net 
-  predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
+  predicted_labels = tf.reshape(net, (batch_size,seq_length,original_num_points, 2) )
   print("predicted_labels", predicted_labels)
 
 

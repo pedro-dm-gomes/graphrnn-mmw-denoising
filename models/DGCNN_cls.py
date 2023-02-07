@@ -147,7 +147,7 @@ def get_model(point_cloud, is_training, model_params):
   out_max = tf.concat(axis=3, values=[out_max, one_hot_label_expand])
   """
   expand = tf.tile(out_max, [1, num_point, 1, 1])
- 
+  print("expand", expand) 
   concat = tf.concat(axis=3, values=[expand, 
                                      net_1,
                                      net_2,
