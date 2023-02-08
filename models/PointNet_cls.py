@@ -42,7 +42,7 @@ def get_model(point_cloud, is_training, model_params):
   sampled_points_down2 = model_params['sampled_points_down2'] #not used
   sampled_points_down3 = model_params['sampled_points_down3'] #not used
   BN_FLAG = model_params['BN_FLAG']
-  bn_decay = model_params['bn_decay']
+  bn_decay = 0.0 #model_params['bn_decay']
   out_channels = model_params['out_channels'] #use?
   drop_rate = model_params['drop_rate']
   graph_module_name = model_params['graph_module']

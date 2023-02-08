@@ -206,6 +206,7 @@ def train():
 
     batch = tf.Variable(0)
     bn_decay = get_bn_decay(batch) 
+    bn_decay = 0.0
     tf.summary.scalar('bn_decay', bn_decay)
         
     model_params = {'context_frames': int(int(args.context_frames)),
@@ -313,7 +314,8 @@ def train():
 
     
     early_stop_count = 0
-    prev_loss = 0
+    best_validation_loss = np.inf
+    
     for epoch in range(ckpt_number, args.num_iters):
       
       sys.stdout.flush() 
@@ -333,13 +335,15 @@ def train():
         mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
         
     
-        if mean_loss > prev_loss : 
-          early_stop_count = early_stop_count + 1
-          print("[LOSS] INCREASED: +1")
-        else:
+        # Manual Early stopping
+        if mean_loss < best_validation_loss:
+          best_validation_loss = mean_loss
           early_stop_count = 0
-        prev_loss = mean_loss
-        if early_stop_count > 4 :
+        else:
+          early_stop_count = early_stop_count + 1
+          print("[PATIENCE] INCREASED: +1")
+          
+        if early_stop_count > 10:
           print("\n\n---- [EARLY STOP ] -----\n\n")
           exit()
         

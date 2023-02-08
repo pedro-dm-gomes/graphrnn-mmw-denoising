@@ -41,10 +41,16 @@ class MMW(object):
         self.num_points = num_points
         #print("num_points:", num_points)
         self.data = []
-
+        
+        if ("Not_Rotated" in root):
+            ROTATED = False
+        else:
+            ROTATED = True
+            
+        
+        
         log_nr = 0
         root = root + '/' +str(num_points) + '/train'
-        
         if train:
 
             npy_files = os.listdir(root)
@@ -80,6 +86,11 @@ class MMW(object):
                 
                 # Rotate Translate and Jitter the point cloud
                 angle = x = y =0 # Dont rotate and dont translate
+                if ROTATED == True:
+                    angle =np.random.uniform(0, 6)
+                    x  = np.random.uniform(-4, 4)
+                    y  =np.random.uniform(-4, 4)
+                #angle = x = y =0 
                 # For each frame
                 for frame in range (0, npy_run.shape[0] ):
                   npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
