@@ -10,6 +10,9 @@ from datasets.bari_train_data import MMW as Dataset_mmW
 from datasets.bari_test_data import MMW as Dataset_mmW_eval
 import importlib
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
@@ -45,9 +48,13 @@ parser.add_argument('--down-points1', type= int , default = 2 , help='[default:2
 parser.add_argument('--down-points2', type= int , default = 2*2 , help='[default:2 #points layer 2')
 parser.add_argument('--down-points3', type= int , default = 2*2*2, help='[default:2 #points layer 3')
 parser.add_argument('--context-frames', type= int , default = 1, help='[default:1 #contex framres')
+parser.add_argument('--manual-restore', type= int , default = 0, help='[default:1 #contex framres')
+parser.add_argument('--restore-ckpt', type= int , default = 76, help='[default:1 #contex framres')
+
 
 """ --  Additional  hyperparameters --- """
 parser.add_argument('--bn_flag', type=int, default=1, help='Do batch normalization[ 1- Yes, 0-No]')
+parser.add_argument('--weight_decay', type=int, default=0, help='Do Weight Decay normalization [ 1- Yes, 0-No]')
 parser.add_argument('--decay_step', type=int, default=200000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
@@ -161,7 +168,6 @@ def get_batch(dataset, batch_size):
         batch_data.append(sample)
     return np.stack(batch_data, axis=0)
 
-
 def get_bn_decay(batch):
     bn_momentum = tf.train.exponential_decay(
                       BN_INIT_DECAY,
@@ -186,6 +192,30 @@ def log_string(out_str):
     LOG_FOUT.write(out_str+'\n')
     LOG_FOUT.flush()
     print(out_str)
+
+def normalize_pca_to_color(l0_pca):
+  """
+  Normalize pca to color
+  Input: PCA of feat (1000,3)
+  Output: Normaize RGB (1000,3)
+  """
+  r= l0_pca[:,0]
+  g= l0_pca[:,1]
+  b= l0_pca[:,2]
+  rgb = np.reshape(l0_pca, ( l0_pca.shape[0]*3 , 1) )
+  r = np.reshape(r, (r.shape[0],1) )
+  g = np.reshape(g, (g.shape[0],1) )
+  b = np.reshape(b, (b.shape[0],1) )
+  
+
+  # Normalize all the colors togeder
+  r = (r-min(rgb))/(max(rgb)-min(rgb))
+  g = (g-min(rgb))/(max(rgb)-min(rgb))
+  b = (b-min(rgb))/(max(rgb)-min(rgb))
+
+  color = np.concatenate( (r, g,b ), axis =1)
+
+  return (color)
     
 
 def evaluate():
@@ -200,7 +230,9 @@ def evaluate():
     print("is_training_pl:", is_training_pl)
 
     batch = tf.Variable(0)
-    bn_decay = get_bn_decay(batch) 
+    if args.weight_decay == 0: bn_decay = 0.0
+    else: bn_decay = get_bn_decay(batch) 
+    
     tf.summary.scalar('bn_decay', bn_decay)
         
     model_params = {'context_frames': int(int(args.context_frames)),
@@ -210,9 +242,9 @@ def evaluate():
   	   	    'bn_decay':bn_decay,
   	   	    'out_channels':args.out_channels,
   	   	    'drop_rate': args.drop_rate,
-  	   	    'sampled_points_down1':args.num_points/(args.down_points1),
-  	   	    'sampled_points_down2':args.num_points/(args.down_points2),
-  	   	    'sampled_points_down3':args.num_points/(args.down_points3)}
+  	   	    'sampled_points_down1':int(args.down_points1),
+  	   	    'sampled_points_down2':int(args.down_points2),
+  	   	    'sampled_points_down3':int(args.down_points3)}
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
     
@@ -230,9 +262,9 @@ def evaluate():
     tf.summary.scalar('learning_rate', learning_rate)
   
     params = tf.trainable_variables()
-    gradients = tf.gradients(loss, params)
-    clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
-    train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
+    #gradients = tf.gradients(loss, params)
+    #clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
+    #train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
 
     saver = tf.train.Saver(max_to_keep=4, keep_checkpoint_every_n_hours = 5)
     
@@ -253,13 +285,22 @@ def evaluate():
     test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'))
 
     # Restore Session
-    checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
-    ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
-    print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
-    #checkpoint_path_automatic =  'outputs/PointNet_cls_pointnet_b16e5/model.ckpt-3520'
-    saver.restore(sess, checkpoint_path_automatic)
-    ckpt_number=ckpt_number[11:]
-    ckpt_number=int(ckpt_number)
+    if (args.manual_restore == 0):
+      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
+      restore_checkpoint_path = checkpoint_path_automatic
+      ckpt_number=ckpt_number[11:]
+      ckpt_number=int(ckpt_number)
+      print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
+    if (args.manual_restore == 1):
+      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
+      ckpt_number=ckpt_number[11:]
+      restore_checkpoint_path =checkpoint_path_automatic.replace(ckpt_number, str(args.restore_ckpt) )
+      ckpt_number= args.restore_ckpt
+      print ("\n** Restore from checkpoint ***: ", restore_checkpoint_path)
+
+    saver.restore(sess, restore_checkpoint_path)
     # change random seed
     np.random.seed(ckpt_number)
     tf.set_random_seed(ckpt_number)
@@ -270,7 +311,6 @@ def evaluate():
   	   'pred': pred,
   	   'loss': loss,
   	   'acc':accuracy,
-  	   'train_op': train_op,
   	   'params': params,
   	   'merged': merged,
        'end_points': end_points,
@@ -282,7 +322,8 @@ def evaluate():
       sys.stdout.flush() 
       #Evaluate
       print(" **  Evalutate VAL Data ** ")
-      mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)     	
+      mean_loss, mean_accuracy   = eval_one_epoch(sess, ops, test_writer, epoch)   
+        	
         
 """ ------------------   """
 def eval_one_epoch(sess,ops,test_writer, epoch):
@@ -292,10 +333,8 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     
     nr_tests = len(test_dataset) 
     num_batches = nr_tests // BATCH_SIZE
-    #print("nr_tests :", nr_tests)
-    #print("BATCH_SIZE:", BATCH_SIZE)
-    #print("num_batches:", num_batches)
-    
+
+      
     x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
     if (BATCH_SIZE not in x): 
       print("[NOT LOADING ALL TEST DATA] - To test the full test data: select a batch size:", x)
@@ -313,7 +352,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       cur_batch_size = end_idx - start_idx
       input_point_clouds =[]
       input_labels =[]
-      
+    
       for idx  in range(start_idx,end_idx): #sequences to be tested
         test_seq = test_dataset[idx]   
         test_seq =np.array(test_seq)
@@ -325,10 +364,11 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       input_point_clouds = np.array(input_point_clouds)
       input_labels = np.array(input_labels)
       
+
       # Send to model to be evaluated
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-      pred, summary, step, train_op, loss, accuracy, params, end_points =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] , ops['end_points']], feed_dict=feed_dict) 
-      test_writer.add_summary(summary, step)  
+      pred, summary, step, loss, accuracy, params, end_points =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['loss'], ops['acc'], ops['params'] , ops['end_points']], feed_dict=feed_dict) 
+      #test_writer.add_summary(summary, step)  # Do not write to tensroboard
       
       total_accuracy = total_accuracy + accuracy
       total_loss = total_loss + loss
@@ -337,36 +377,159 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       Fp = Fp + (false_positives)
       Tn = Tn + (true_negatives)
       Fn = Fn + (false_negatives)
-      
-    
-      """ Visualize weights in terminal """
-      print_weights(sess, params, 82)
-      
-      print("---  Store Values ---")
 
-      DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/Data_'+ args.version +'/'
+      """ Visualize weights in terminal """
+      #print_weights(sess, params, 82)
+      
+      """ Data Analyzes """
+      DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/'+ args.version +'/'
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
+      
+      id_seq_to_visualize = [40,200,500]
+      if( idx in id_seq_to_visualize):
+        
+        print("\Plot results for sequence: ", idx)
+        
+        last_d_feat = end_points['last_d_feat']
+        input_point_clouds = input_point_clouds[0] # batch size is 1
+        input_labels = input_labels[0]
+        pred = pred[0]
+        last_d_feat = last_d_feat[0]
+        pred_soft_max = np.exp(pred) / np.sum(np.exp(pred), axis=-1, keepdims=True)
+
+        # Do the  PCA of the features
+        last_d_feat = np.reshape(last_d_feat, (SEQ_LENGTH*NUM_POINTS,last_d_feat.shape[2] ) )
+        pca = PCA(n_components=3)
+        feat_pca = np.zeros((last_d_feat.shape[0], 3) )
+        feat_pca = pca.fit_transform(last_d_feat)
+        feat_cor = normalize_pca_to_color(feat_pca)
+        feat_cor = np.reshape(feat_cor,  (SEQ_LENGTH, NUM_POINTS, 3 ))
+          
+        #Convert the labels into color
+        cor_labels = np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+        cor_pred =  np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+        one_hot_cor_pred =np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+        for f in range (0, SEQ_LENGTH):
+          for p in range(0,NUM_POINTS):
+            if(input_labels[f,p,0]) == 0: # NOISE DATA
+               cor_labels[f, p, :] = [1.0, 0.0, 0.0] # RED
+            if(input_labels[f,p,0]) == 1: # Clean DATA
+               cor_labels[f, p, :] = [0.0, 1.0, 0.0] # GREEN     
+            if(pred[f,p,0] < pred[f,p,1]):
+              one_hot_cor_pred[f,p,:] =  [0.0, 1.0, 0.0] # GREEN     
+            else:
+              one_hot_cor_pred[f,p,:] = [1.0, 0.0, 0.0] # RED
+            cor_pred[f, p, :] = [ pred_soft_max[f,p,0], pred_soft_max[f,p,1], 0.0] # Color is probability
+                   
+        
+        """ Save Images """
+        # Ground-truth point cloud
+        nr_subplots = SEQ_LENGTH
+        fig = plt.figure(figsize=(10*nr_subplots, 6))
+        for f in range (0,nr_subplots):
+          ax = fig.add_subplot(1,nr_subplots,f+1)
+          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= cor_labels[f])
+          title = 'frame:' + str(f)
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          ax.set_ylim([-5, 5])
+        fig.suptitle("Input point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/gdt_"+ str(idx) + ".png")
+
+        
+        # Predictions
+        fig = plt.figure(figsize=(10*nr_subplots, 6))
+        for f in range (0,nr_subplots):
+          ax = fig.add_subplot(1,nr_subplots,f+1)
+          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= cor_pred[f])
+          title = 'frame:' + str(f)
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          ax.set_ylim([-5, 5])
+        fig.suptitle("Predicted point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/pdt_"+ str(idx) + ".png")
+
+
+        # Predictions - One hot
+        fig = plt.figure(figsize=(10*nr_subplots, 6))
+        for f in range (0,nr_subplots):
+          ax = fig.add_subplot(1,nr_subplots,f+1)
+          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= one_hot_cor_pred[f])
+          title = 'frame:' + str(f)
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          ax.set_ylim([-5, 5])
+        fig.suptitle("1-Hot Predicted point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/1hot_pdt_"+ str(idx) + ".png")
+
+                
+
+        # Last layer features 
+        fig = plt.figure(figsize=(10*nr_subplots, 6))
+        for f in range (0,nr_subplots):
+          ax = fig.add_subplot(1,nr_subplots,f+1)
+          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], color= feat_cor[f])
+          title = 'frame:' + str(f)
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          ax.set_ylim([-5, 5])
+        fig.suptitle("Last layer features " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/last_feat_"+ str(idx) + ".png")
+   
+        
+        #Plot Large Figure
+        nr_rows = 4
+        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        row = 0
+        fig = plt.figure(figsize=(10*nr_subplots, 6*nr_rows))
+        for cor in [cor_labels, feat_cor, cor_pred, one_hot_cor_pred ]:
+          for f in range (0,nr_subplots):
+            ax = fig.add_subplot(nr_rows,nr_subplots,f+1+ row*nr_subplots)
+            ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], color= cor[f])
+            title = plot_titles[row]+ ' frame:' + str(f)
+            ax.set_title(title)
+            ax.set_xlim([-5, 5])
+            ax.set_ylim([-5, 5])
+          row = row +1
+        
+        fig.suptitle("Sequence" + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/seq_"+ str(idx) + ".png")
+        print("\n")             
+        
+        
+        #exit()
+
+      
+      
       #print("DATA_DIR:", DATA_DIR )
 
       #points
-      points = end_points['points']
+      #points = end_points['points']
       #print("np.sum(points-input_point_clouds) ",np.sum(points-input_point_clouds) )
       #print("points:", points.shape)
-      np.save(DATA_DIR + '/points_'+ str(idx) +'.npy',points )
+      #np.save(DATA_DIR + '/points_'+ str(idx) +'.npy',points )
       
       #labels
       #print("input_labels:", input_labels.shape)
-      np.save(DATA_DIR + '/labels_'+ str(idx) +'.npy',input_labels )
+      #np.save(DATA_DIR + '/labels_'+ str(idx) +'.npy',input_labels )
       
       # features
-      last_d_feat = end_points['last_d_feat']
+      #last_d_feat = end_points['last_d_feat']
       #print("last_d_feat:", last_d_feat.shape)
-      np.save(DATA_DIR + '/last_d_feat_'+ str(idx) +'.npy',last_d_feat )
+      #np.save(DATA_DIR + '/last_d_feat_'+ str(idx) +'.npy',last_d_feat )
       
       # Predictions
-      print("pred.shape", pred.shape)
+      #print("pred.shape", pred.shape)
       #predicted_labels = np.argmax(pred, axis=3)
-      np.save(DATA_DIR + '/pred_'+ str(idx) +'.npy',pred)
+      #np.save(DATA_DIR + '/pred_'+ str(idx) +'.npy',pred)
       
             
     mean_loss = total_loss/ num_batches
@@ -387,7 +550,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
     	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
 
-    return mean_loss        
+    return mean_loss, mean_accuracy        
       
                 
                   

@@ -42,7 +42,7 @@ def get_model(point_cloud, is_training, model_params):
   sampled_points_down2 = model_params['sampled_points_down2'] #not used
   sampled_points_down3 = model_params['sampled_points_down3'] #not used
   BN_FLAG = model_params['BN_FLAG']
-  bn_decay = 0.0 #model_params['bn_decay']
+  bn_decay = model_params['bn_decay']
   out_channels = model_params['out_channels'] #use?
   drop_rate = model_params['drop_rate']
   graph_module_name = model_params['graph_module']
@@ -121,10 +121,12 @@ def get_model(point_cloud, is_training, model_params):
 
   net = tf_util.conv2d(net_last, 2, [1,1],
                         padding='VALID', stride=[1,1], activation_fn=None,
-                        scope='conv10')
+                         is_training=is_training, scope='conv10')
   
   net = tf.squeeze(net, [2]) # BxNxC
-  print("net", net)
+
+  net_last =  tf.reshape(net_last, (batch_size, seq_length, num_points,50 ))
+  print("net_last", net_last) # (batch, frames, npoints, dims)
   
   end_points['last_d_feat'] = net_last 
   end_points['points'] = point_cloud 

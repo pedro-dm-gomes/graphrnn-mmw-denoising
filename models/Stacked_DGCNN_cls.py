@@ -169,12 +169,16 @@ def get_model(point_cloud, is_training, model_params):
   net2 = tf_util.dropout(net2, keep_prob=0.6, is_training=is_training, scope='seg/dp2')
   net2 = tf_util.conv2d(net2, 64, [1,1], padding='VALID', stride=[1,1], bn_decay=bn_decay,
             bn=True, is_training=is_training, scope='seg/conv3', weight_decay=weight_decay, is_dist=True)
+  net_last =  net2
   net2 = tf_util.conv2d(net2, 2, [1,1], padding='VALID', stride=[1,1], activation_fn=None, 
             bn=False, scope='seg/conv4', weight_decay=weight_decay, is_dist=True)
+
+  print("net_last", net_last.shape)
+  net_last = tf.reshape(net_last, (batch_size, seq_length, original_num_points,64 ))
+  end_points['last_d_feat'] = net_last 
   
-  print("net2", net2.shape)
-  net = tf.squeeze(net2, [2])
   
+  net = tf.squeeze(net2, [2])  
   predicted_labels = tf.reshape(net, (batch_size,seq_length,original_num_points, 2) )
   print("predicted_labels", predicted_labels, "\n")
   

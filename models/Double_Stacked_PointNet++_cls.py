@@ -3,7 +3,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 """
-Implement a FLowNet Architecture like the paper
+Implement a PointNet Architecture like the paper
 
 """
 
@@ -14,20 +14,19 @@ sys.path.append(os.path.join(ROOT_DIR, 'modules/tf_ops/nn_distance'))
 sys.path.append(os.path.join(ROOT_DIR, 'modules/tf_ops/approxmatch'))
 sys.path.append(os.path.join(ROOT_DIR, 'modules/dgcnn_utils'))
 
-
 from pointnet2_color_feat_states import *
 import graph_rnn_modules as modules
 import tf_util
-from flow_net_modules import flow_embedding_module, set_upconv_module
 from transform_nets import input_transform_net, feature_transform_net
 
 def placeholder_inputs(batch_size, seq_length, num_points):
   
  
   pointclouds_pl = tf.placeholder(tf.float32, shape=(batch_size,seq_length, num_points, 3))
+  rotated_pointcloud_pl = tf.placeholder(tf.float32, shape=(batch_size,seq_length, num_points, 3))
   labels_pl = tf.placeholder(tf.int32, shape=(batch_size, seq_length, num_points,1 ))
   
-  return pointclouds_pl, labels_pl
+  return pointclouds_pl, rotated_pointcloud_pl,  labels_pl
   
 def get_model(point_cloud,  is_training, model_params):
   
@@ -49,6 +48,7 @@ def get_model(point_cloud,  is_training, model_params):
   graph_module_name = model_params['graph_module']
   end_points = {}
   
+
   #Stacked Frame processing
   context_frames = 0
   original_num_points =num_points
@@ -72,55 +72,79 @@ def get_model(point_cloud,  is_training, model_params):
   #### PointNET ++ 
   #l0_xyz = tf.slice(point_cloud, [0,0,0], [-1,-1,3])
   l0_xyz_f1 = point_cloud[:,0,:,:]
+  l0_rot_xyz_f1 = rotated_pointcloud[:,0,:,:]
   l0_points_f1 = timestep_tensor[:,0,:,:] #tf.zeros(l0_xyz.shape) 
   l0_xyz_f2 =  point_cloud[:,1,:,:]
+  l0_rot_xyz_f2 = rotated_pointcloud[:,1,:,:]
   l0_points_f2 = timestep_tensor[:,1,:,:] #tf.zeros(l0_xyz.shape)   
   l0_xyz_f3 = point_cloud[:,2,:,:]
+  l0_rot_xyz_f3 = rotated_pointcloud[:,2,:,:]
   l0_points_f3 = timestep_tensor[:,2,:,:] #tf.zeros(l0_xyz.shape)   
   
   print("\n")
   print("l0_xyz_f1", l0_xyz_f1)
+  print("l0_rot_xyz_f1", l0_rot_xyz_f1)
   print("l0_points", l0_points_f1)
 
   
     
   # PointNet++ Layers
   with tf.variable_scope('sa1', reuse=tf.AUTO_REUSE) as scope:
+    
     # Frame 1, 
     l1_xyz_f1, l1_points_f1, l1_indices_f1 = pointnet_sa_module(l0_xyz_f1, l0_points_f1,npoint=int(num_points/sampled_points_down1), radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer1')
     l2_xyz_f1, l2_points_f1, l2_indices_f1 = pointnet_sa_module(l1_xyz_f1, l1_points_f1, npoint=int(num_points/sampled_points_down2), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer2')
     l3_xyz_f1, l3_points_f1, l3_indices_f1 = pointnet_sa_module(l2_xyz_f1, l2_points_f1, npoint=int(num_points/sampled_points_down3), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer3')
     
+    scope.reuse_variables()
     # Frame 2
     l1_xyz_f2, l1_points_f2, l1_indices_f2 = pointnet_sa_module(l0_xyz_f2, l0_points_f2, npoint=int(num_points/sampled_points_down1), radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer1')
     l2_xyz_f2, l2_points_f2, l1_indices_f2 = pointnet_sa_module(l1_xyz_f2, l1_points_f2,  npoint=int(num_points/sampled_points_down2), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer2')
     l3_xyz_f2, l3_points_f2, l3_indices_f2 = pointnet_sa_module(l2_xyz_f2, l2_points_f2, npoint=int(num_points/sampled_points_down3), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer3')
     
+    scope.reuse_variables()
     # Frame 3
     l1_xyz_f3, l1_points_f3, l1_indices_f3 = pointnet_sa_module(l0_xyz_f3, l0_points_f3, npoint=int(num_points/sampled_points_down1), radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer1')
     l2_xyz_f3, l2_points_f3, l1_indices_f3 = pointnet_sa_module(l1_xyz_f3, l1_points_f3, npoint=int(num_points/sampled_points_down2), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer2')
     l3_xyz_f3, l3_points_f3, l3_indices_f3 = pointnet_sa_module(l2_xyz_f3, l2_points_f3, npoint=int(num_points/sampled_points_down3), radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, knn= True, is_training=is_training, bn_decay=bn_decay, scope='layer3')
+            
 
   print("l3_xyz_f1", l3_xyz_f1)
   print("l3_xyz_f2", l3_xyz_f2)
   print("l3_xyz_f3", l3_xyz_f3)
   
-  l0_xyz = tf.concat( (l0_xyz_f1,l0_xyz_f2,l0_xyz_f3), axis =1 )
-  l1_xyz = tf.concat( (l1_xyz_f1,l1_xyz_f2,l2_xyz_f3), axis =1 )
-  l2_xyz = tf.concat( (l2_xyz_f1,l2_xyz_f2,l2_xyz_f3), axis =1 )
-  l3_xyz = tf.concat( (l3_xyz_f1,l3_xyz_f2,l3_xyz_f3), axis =1 )
+  # Merge all frames together
+  l3_xyz_f1 = tf.expand_dims(l3_xyz_f1, axis=1)
+  l3_xyz_f2 = tf.expand_dims(l3_xyz_f2, axis=1)
+  l3_xyz_f3 = tf.expand_dims(l3_xyz_f3, axis=1)
+  l2_xyz_f1 = tf.expand_dims(l2_xyz_f1, axis=1)
+  l2_xyz_f2 = tf.expand_dims(l2_xyz_f2, axis=1)
+  l2_xyz_f3 = tf.expand_dims(l2_xyz_f3, axis=1)
+  l1_xyz_f1 = tf.expand_dims(l1_xyz_f1, axis=1)
+  l1_xyz_f2 = tf.expand_dims(l1_xyz_f2, axis=1)
+  l1_xyz_f3 = tf.expand_dims(l1_xyz_f3, axis=1)
 
+  print("\nl3_xyz_f1", l3_xyz_f1)
+  print("l3_xyz_f2", l3_xyz_f2)
+  print("l3_xyz_f3", l3_xyz_f3)
+  
+  merged_xyz_3 = tf.concat( (l3_xyz_f1,l3_xyz_f2, l3_xyz_f3), axis =1)
+  l3_xyz = tf.reshape(merged_xyz_3 ,  (merged_xyz_3.shape[0], merged_xyz_3.shape[1]* merged_xyz_3.shape[2], merged_xyz_3.shape[3] ))
+  print("merged_xyz_3.shape", merged_xyz_3)
+  merged_xyz_2 = tf.concat( (l2_xyz_f1,l2_xyz_f2, l2_xyz_f3), axis =1)
+  l2_xyz = tf.reshape(merged_xyz_2 ,  (merged_xyz_2.shape[0], merged_xyz_2.shape[1]* merged_xyz_2.shape[2], merged_xyz_2.shape[3] ))
+  print("merged_xyz_2.shape", merged_xyz_2)
+  merged_xyz_1 = tf.concat( (l1_xyz_f1,l1_xyz_f2, l1_xyz_f3), axis =1)
+  l1_xyz = tf.reshape(merged_xyz_1 ,  (merged_xyz_1.shape[0], merged_xyz_1.shape[1]* merged_xyz_1.shape[2], merged_xyz_1.shape[3] ))
+  print("merged_xyz_1.shape", merged_xyz_1)
+  l0_xyz = tf.concat( (l0_xyz_f1,l0_xyz_f1,l0_xyz_f3), axis =1 )
+  print("l0_xyz.shape", l0_xyz)
   
   l0_points = tf.concat( (l0_points_f1,l0_points_f2,l0_points_f3), axis =1 )
   l1_points = tf.concat( (l1_points_f1,l1_points_f2,l1_points_f3), axis =1 )
   l2_points = tf.concat( (l2_points_f1,l2_points_f2,l2_points_f3), axis =1 )
   l3_points = tf.concat( (l3_points_f1,l3_points_f2,l3_points_f3), axis =1 )
-
-  print("l1_xyz_f1", l1_xyz_f1)
-  print("l2_xyz_f2", l2_xyz_f2)
-  print("l3_xyz_f3", l3_xyz_f3)
-    
-
+  
   # Set Abstraction layers
   # no downsampleing
   l1_xyz, l1_points, l1_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(int(l1_points.shape[1])), knn= True, radius=0.2, nsample=num_samples,  mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
@@ -133,9 +157,15 @@ def get_model(point_cloud,  is_training, model_params):
   l0_points = pointnet_fp_module(l0_xyz, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
 
   
+  print("l2_points", l2_points)
+  print("l1_points", l1_points)
+  print("l0_points", l0_points)
+  
+
+  
   # FC layers
   net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
-  #net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope='dp1')
+  net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope='dp1')
   net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
 
   
@@ -144,9 +174,8 @@ def get_model(point_cloud,  is_training, model_params):
   predicted_labels = tf.reshape(net, (batch_size,seq_length,original_num_points, 2) )
   print("predicted_labels", predicted_labels)
 
-  #exit()
+  
   return predicted_labels, end_points
-      
        
 
 def get_loss(predicted_labels, ground_truth_labels, context_frames):
@@ -181,7 +210,7 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
     frame_loss = tf.reduce_mean(frame_loss)
     sequence_loss = sequence_loss + frame_loss  	
   	
-  sequence_loss = sequence_loss/(seq_length)
+  sequence_loss = sequence_loss/(seq_length )
   return sequence_loss 
   
 

@@ -56,7 +56,8 @@ class MMW(object):
             npy_files = os.listdir(root)
 
             # for fast debug
-            #npy_files = [ "labels_run_4.npy"]
+            #npy_files = [ "run_labelled_mmw_run_4.npy"]
+            #npy_files = npy_files[0] 
             
             #Repeat array To futher augument
             #npy_files =  np.repeat(npy_files, 2)
@@ -85,12 +86,12 @@ class MMW(object):
                 	npy_run = np.flip(npy_run, axis = 0)
                 
                 # Rotate Translate and Jitter the point cloud
-                angle = x = y =0 # Dont rotate and dont translate
                 if ROTATED == True:
-                    angle =np.random.uniform(0, 6)
-                    x  = np.random.uniform(-4, 4)
-                    y  =np.random.uniform(-4, 4)
-                #angle = x = y =0 
+                    angle =np.random.uniform(-4, 4)
+                    x  = np.random.uniform(-2, 2)
+                    y  =np.random.uniform(-2, 2)
+                else:
+                    angle = x = y =0  # Dont rotate and dont translate
                 # For each frame
                 for frame in range (0, npy_run.shape[0] ):
                   npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
@@ -99,8 +100,6 @@ class MMW(object):
                 self.data.append(npy_run)
             
             print("Train  data", np.shape(self.data) )
-            #exit()
-
          
 
     def __len__(self):

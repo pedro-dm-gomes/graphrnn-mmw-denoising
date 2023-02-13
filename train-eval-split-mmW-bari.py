@@ -48,10 +48,11 @@ parser.add_argument('--context-frames', type= int , default = 1, help='[default:
 
 """ --  Additional  hyperparameters --- """
 parser.add_argument('--bn_flag', type=int, default=1, help='Do batch normalization[ 1- Yes, 0-No]')
+parser.add_argument('--weight_decay', type=int, default=0, help='Do Weight Decay normalization [ 1- Yes, 0-No]')
 parser.add_argument('--decay_step', type=int, default=200000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
-parser.add_argument('--regularizer_scale', type=float, default=0.01, help='Regulaizer value[default: 0.0- or 0.001]') 
+parser.add_argument('--regularizer_scale', type=float, default=0.00, help='Regulaizer value[default: 0.0- or 0.001]') 
 print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
@@ -202,11 +203,10 @@ def train():
     print("pointclouds_pl", pointclouds_pl)
     print("labels_pl", labels_pl)
     print("is_training_pl:", is_training_pl)
-    #
 
     batch = tf.Variable(0)
-    bn_decay = get_bn_decay(batch) 
-    bn_decay = 0.0
+    if args.weight_decay == 0: bn_decay = 0.0
+    else: bn_decay = get_bn_decay(batch) 
     tf.summary.scalar('bn_decay', bn_decay)
         
     model_params = {'context_frames': int(int(args.context_frames)),
@@ -231,7 +231,7 @@ def train():
   
     # Manual regulaizer -force all the trainbale weights to be small
     regularizer_scale = args.regularizer_scale
-    regularizer_alpha = 1
+    regularizer_alpha = 0.1
     print("regularizer_scale", regularizer_scale)
     params_to_be_regulaized = []
     params = tf.trainable_variables()
@@ -249,14 +249,15 @@ def train():
     reg_losses= sum(reg_losses)
     tf.summary.scalar('reg_losses', reg_losses  )
     loss =  loss + regularizer_alpha * reg_losses
-  
+    tf.summary.scalar('total_loss', loss)
+    
     # Calculate accuracy tensor
     accuracy = get_acurracy_tensor(pred, labels_pl,BATCH_SIZE,SEQ_LENGTH, NUM_POINTS, context_frames = model_params['context_frames'])
     tf.summary.scalar('accuracy', accuracy)
 
     # Get training operator
     learning_rate = get_learning_rate(batch) 
-    #learning_rate = BASE_LEARNING_RATE
+    #if (is_training_pl == False):learning_rate = 0.0
     tf.summary.scalar('learning_rate', learning_rate)
   
     gradients = tf.gradients(loss, params)
@@ -286,7 +287,7 @@ def train():
     #init = tf.initialize_all_variables()
     if args.restore_training == False:
     	init = tf.global_variables_initializer()
-    	sess.run(init, {is_training_pl: True})
+    	sess.run(init)
     	ckpt_number = 0 
     else:
     	# Restore Session
@@ -315,6 +316,8 @@ def train():
     
     early_stop_count = 0
     best_validation_loss = np.inf
+    best_test_acurracy =  0.0
+    patience_limit = 5
     
     for epoch in range(ckpt_number, args.num_iters):
       
@@ -332,19 +335,25 @@ def train():
       
         #Evaluate
         print(" **  Evalutate VAL Data ** ")
-        mean_loss = eval_one_epoch(sess, ops, test_writer, epoch)
+        val_loss = eval_one_epoch(sess, ops, test_writer, epoch)
         
-    
         # Manual Early stopping
-        if mean_loss < best_validation_loss:
-          best_validation_loss = mean_loss
+        if val_loss < best_validation_loss:
+          best_validation_loss = val_loss
+          print("[Lowest loss]:",best_validation_loss )
           early_stop_count = 0
         else:
           early_stop_count = early_stop_count + 1
-          print("[PATIENCE] INCREASED: +1")
+          print("[Lowest loss]:",best_validation_loss )
+          print("[PATIENCE]:", early_stop_count)
           
-        if early_stop_count > 10:
-          print("\n\n---- [EARLY STOP ] -----\n\n")
+        if early_stop_count > patience_limit:
+          print(" **  Evalutate All Test Data ** ")
+          #test_acurracy = eval_all_test_data(sess, ops, test_writer, epoch)
+          #if ( test_acurracy > best_test_acurracy):
+          #  best_test_acurracy = test_acurracy        
+          #log_string('%03d  Best Test Accuracy: %f' % (epoch, best_test_acurracy))
+          log_string("\n\n---- [EARLY STOP ] -----\n\n")
           exit()
         
         # Restore Checkpoint
@@ -357,13 +366,17 @@ def train():
         tf.set_random_seed(ckpt_number)  
         
       # Evaluate ALL Test Data
-      if (epoch % 50 == 0 and epoch!=0):  
+      if (epoch % 100 == 0 and epoch < 0):  
         # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
         
         print(" **  Evalutate All Test Data ** ")
-        eval_all_test_data(sess, ops, test_writer, epoch)
+        test_acurracy = eval_all_test_data(sess, ops, test_writer, epoch)
+        if ( test_acurracy > best_test_acurracy):
+          best_test_acurracy = test_acurracy
+        print("[Best Test Accuracy]: ", best_test_acurracy)
+        
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
         print ("-- Restore from checkpoint: ", tf.train.latest_checkpoint(LOG_DIR))
         saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
@@ -372,13 +385,14 @@ def train():
         tf.set_random_seed(ckpt_number)
         
       # Reload Dataset
-      if (epoch % 6 == 0 and epoch != 0):
+      if (epoch % 3 == 0 and epoch != 0):
+        print("[Dataset Reload/Augumented] ")   
         train_dataset = Dataset_mmW(root=args.data_dir,
                         		   seq_length=args.seq_length,
                         		   num_points=args.num_points,
                         		   train=True)
-        print("[Dataset Reload/Augumented] ",train_dataset )    	
-        
+
+
 """ ------------------   """
 
 def train_one_epoch(sess,ops,train_writer, epoch):
@@ -480,18 +494,14 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     """ Visualize weights in terminal """
     #print_weights(sess, params, 82)
 
-    
-    
+  
     # Write to File
     #log_string('****  %03d ****' % (epoch))
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
     	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
-
-        
-
+     
     return mean_loss        
-      
                 
 def eval_all_test_data(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
@@ -544,9 +554,10 @@ def eval_all_test_data(sess,ops,test_writer, epoch):
     log_string(" All test data ")
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
-    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
-
+      log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
+    return mean_accuracy
     
+
                   
 if __name__ == "__main__":
     train()
