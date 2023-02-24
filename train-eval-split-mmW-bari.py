@@ -224,9 +224,10 @@ def train():
     
     # Normal Loss
     loss = MODEL.get_loss(pred, labels_pl, context_frames = model_params['context_frames'])
+    tf.summary.scalar('loss', loss)
     # Balanced Loss
     #loss = MODEL.get_balanced_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-    tf.summary.scalar('loss', loss)
+    #tf.summary.scalar('balanced loss', loss)
     
   
     # Manual regulaizer -force all the trainbale weights to be small
@@ -328,7 +329,7 @@ def train():
         train_one_epoch(sess, ops,train_writer, epoch)
         
       #  Test Data Val 
-      if (epoch % 4 == 0): 	   
+      if (epoch % 4 == 0 and epoch != 0): 	   
         # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
@@ -385,7 +386,7 @@ def train():
         tf.set_random_seed(ckpt_number)
         
       # Reload Dataset
-      if (epoch % 3 == 0 and epoch != 0):
+      if (epoch % 6 == 0 and epoch != 0):
         print("[Dataset Reload/Augumented] ")   
         train_dataset = Dataset_mmW(root=args.data_dir,
                         		   seq_length=args.seq_length,

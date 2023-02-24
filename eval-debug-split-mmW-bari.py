@@ -386,6 +386,12 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
       
       id_seq_to_visualize = [40,200,500]
+      
+      if(accuracy > 1.0):
+        print("add idx for visualization:", idx)
+        print("accuracy:", accuracy)
+        id_seq_to_visualize.append(idx)
+      
       if( idx in id_seq_to_visualize):
         
         print("\Plot results for sequence: ", idx)
@@ -423,71 +429,34 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
                    
         
         """ Save Images """
-        # Ground-truth point cloud
         nr_subplots = SEQ_LENGTH
-        fig = plt.figure(figsize=(10*nr_subplots, 6))
-        for f in range (0,nr_subplots):
-          ax = fig.add_subplot(1,nr_subplots,f+1)
-          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= cor_labels[f])
-          title = 'frame:' + str(f)
+        nr_rows = 4
+        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
+        S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
+        S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
+        S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        row = 0
+        # Plot Stacked Figure
+        fig = plt.figure(figsize=(10*nr_rows, 6))
+        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+          ax = fig.add_subplot(1,nr_rows,row+1)
+          ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor)
+          title = plot_titles[row]
           ax.set_title(title)
           ax.set_xlabel("X-axis")
           ax.set_ylabel("Y-axis")
           ax.set_xlim([-5, 5])
           ax.set_ylim([-5, 5])
+          row = row +1
         fig.suptitle("Input point cloud " + str(idx), fontsize=16)
-        fig.savefig(DATA_DIR+"/gdt_"+ str(idx) + ".png")
-
+        fig.savefig(DATA_DIR+"/Stacked_"+ str(idx) + ".png")
         
-        # Predictions
-        fig = plt.figure(figsize=(10*nr_subplots, 6))
-        for f in range (0,nr_subplots):
-          ax = fig.add_subplot(1,nr_subplots,f+1)
-          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= cor_pred[f])
-          title = 'frame:' + str(f)
-          ax.set_title(title)
-          ax.set_xlabel("X-axis")
-          ax.set_ylabel("Y-axis")
-          ax.set_xlim([-5, 5])
-          ax.set_ylim([-5, 5])
-        fig.suptitle("Predicted point cloud " + str(idx), fontsize=16)
-        fig.savefig(DATA_DIR+"/pdt_"+ str(idx) + ".png")
-
-
-        # Predictions - One hot
-        fig = plt.figure(figsize=(10*nr_subplots, 6))
-        for f in range (0,nr_subplots):
-          ax = fig.add_subplot(1,nr_subplots,f+1)
-          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], c= one_hot_cor_pred[f])
-          title = 'frame:' + str(f)
-          ax.set_title(title)
-          ax.set_xlabel("X-axis")
-          ax.set_ylabel("Y-axis")
-          ax.set_xlim([-5, 5])
-          ax.set_ylim([-5, 5])
-        fig.suptitle("1-Hot Predicted point cloud " + str(idx), fontsize=16)
-        fig.savefig(DATA_DIR+"/1hot_pdt_"+ str(idx) + ".png")
-
-                
-
-        # Last layer features 
-        fig = plt.figure(figsize=(10*nr_subplots, 6))
-        for f in range (0,nr_subplots):
-          ax = fig.add_subplot(1,nr_subplots,f+1)
-          ax.scatter(input_point_clouds[f,:,0], input_point_clouds[f,:,1], color= feat_cor[f])
-          title = 'frame:' + str(f)
-          ax.set_title(title)
-          ax.set_xlabel("X-axis")
-          ax.set_ylabel("Y-axis")
-          ax.set_xlim([-5, 5])
-          ax.set_ylim([-5, 5])
-        fig.suptitle("Last layer features " + str(idx), fontsize=16)
-        fig.savefig(DATA_DIR+"/last_feat_"+ str(idx) + ".png")
    
         
         #Plot Large Figure
         nr_rows = 4
-        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
         row = 0
         fig = plt.figure(figsize=(10*nr_subplots, 6*nr_rows))
         for cor in [cor_labels, feat_cor, cor_pred, one_hot_cor_pred ]:
@@ -503,34 +472,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         fig.suptitle("Sequence" + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/seq_"+ str(idx) + ".png")
         print("\n")             
-        
-        
-        #exit()
 
-      
-      
-      #print("DATA_DIR:", DATA_DIR )
-
-      #points
-      #points = end_points['points']
-      #print("np.sum(points-input_point_clouds) ",np.sum(points-input_point_clouds) )
-      #print("points:", points.shape)
-      #np.save(DATA_DIR + '/points_'+ str(idx) +'.npy',points )
-      
-      #labels
-      #print("input_labels:", input_labels.shape)
-      #np.save(DATA_DIR + '/labels_'+ str(idx) +'.npy',input_labels )
-      
-      # features
-      #last_d_feat = end_points['last_d_feat']
-      #print("last_d_feat:", last_d_feat.shape)
-      #np.save(DATA_DIR + '/last_d_feat_'+ str(idx) +'.npy',last_d_feat )
-      
-      # Predictions
-      #print("pred.shape", pred.shape)
-      #predicted_labels = np.argmax(pred, axis=3)
-      #np.save(DATA_DIR + '/pred_'+ str(idx) +'.npy',pred)
-      
             
     mean_loss = total_loss/ num_batches
     mean_accuracy = total_accuracy/ num_batches

@@ -74,9 +74,9 @@ def get_model(point_cloud, is_training, model_params):
   print("l0_points", l0_points)
 
   # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int(num_points/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
-  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(num_points/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
-  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int(num_points/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
+  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int(num_points/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
+  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(num_points/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
+  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int(num_points/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
 
   print("l1_points", l1_points)
   print("l2_points", l2_points)
@@ -84,10 +84,10 @@ def get_model(point_cloud, is_training, model_params):
   
 
   # Feature Propagation layers
-  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer1')
-  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer2')
+  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256,128], is_training, bn_decay, scope='fa_layer1')
+  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128,128], is_training, bn_decay, scope='fa_layer2')
   l0_points = pointnet_fp_module(l0_xyz, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer3')
-
+  l0_points = tf.concat( (l0_points,timestep_tensor), axis =2)
   
   print("l2_points", l2_points)
   print("l1_points", l1_points)
@@ -95,13 +95,14 @@ def get_model(point_cloud, is_training, model_params):
   
 
   # FC layers
-  net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
+  net = tf_util.conv1d(l0_points, 129, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
+  net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
   net_last = net
-  net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope='dp1')
+  #net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope='dp1')
   net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
   
   print("net_last", net_last.shape)
-  net_last = tf.reshape(net_last, (batch_size, seq_length, original_num_points,128 ))
+  net_last = tf.reshape(net_last, (batch_size, seq_length, original_num_points,64 ))
   end_points['last_d_feat'] = net_last 
     
   
@@ -149,3 +150,55 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
   
 
  
+ 
+def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
+  """ Calculate balanced loss 
+   inputs: predicted labels : 
+   	   ground_truth_labels: (batch, seq_length, num_points, 1)
+   	   predicted_labels : (batch,seq_length, num_points, 2
+  """
+  batch_size = ground_truth_labels.get_shape()[0].value
+  seq_length = ground_truth_labels.get_shape()[1].value
+  num_points = ground_truth_labels.get_shape()[2].value
+  
+  # Convert labels to a list - This can be improved but it works
+  ground_truth_labels = tf.split(value = ground_truth_labels , num_or_size_splits=seq_length, axis=1)
+  ground_truth_labels = [tf.squeeze(input=label, axis=[1]) for label in ground_truth_labels] 
+  
+  predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
+  predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
+  
+  sequence_loss = 0
+  #Calculate loss frame by frame
+  for frame in range(context_frames,seq_length ):
+    logits = predicted_labels[frame]
+    labels = ground_truth_labels[frame]
+
+    logits = tf.reshape(logits, [batch_size * num_points , 2])
+    labels = tf.reshape(labels, [batch_size*num_points ,])
+    labels = tf.cast(labels, tf.int32)
+
+    #print("--- Normal Classification ---")
+    frame_loss =0
+    frame_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    frame_loss = tf.cast(frame_loss, tf.float32)
+    
+    labels = tf.cast(labels, tf.float32)
+    print("---Weighted Classification ---")
+    mask_0 = tf.where(labels < 0.5, tf.ones_like(labels), tf.zeros_like(labels))  # 0 -Noise points
+    mask_1 = tf.where(labels > 0.5, tf.ones_like(labels), tf.zeros_like(labels))  # 1 -Clean points
+    mask_0 = tf.cast(mask_0, tf.float32)
+    mask_1 = tf.cast(mask_1, tf.float32)
+    
+    print("mask_0", mask_0)
+    print("frame_loss", frame_loss)
+    frame_loss_0 = frame_loss * mask_0 * 0.7 # worth less
+    frame_loss_1 = frame_loss * mask_1 * 1.3 # worth more
+    frame_loss = frame_loss_0 + frame_loss_1
+
+    frame_loss = tf.reduce_mean(frame_loss)
+    sequence_loss = sequence_loss + frame_loss  	
+  	
+  sequence_loss = sequence_loss/(seq_length)
+  return sequence_loss  
+

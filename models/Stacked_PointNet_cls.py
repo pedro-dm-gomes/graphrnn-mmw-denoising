@@ -17,6 +17,7 @@ sys.path.append(os.path.join(ROOT_DIR, 'modules/dgcnn_utils'))
 from pointnet2_color_feat_states import *
 import graph_rnn_modules as modules
 import tf_util
+import tf_util
 from transform_nets import input_transform_net, feature_transform_net
 
 def placeholder_inputs(batch_size, seq_length, num_points):
@@ -47,70 +48,111 @@ def get_model(point_cloud, is_training, model_params):
   graph_module_name = model_params['graph_module']
   end_points = {}
   
-  #Single Frame processing
   context_frames = 0
+  original_num_points =num_points
   
-  print("[Load Module]: ",graph_module_name) # PointNET++
   
-  print("point_cloud.shape", point_cloud.shape)
-  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * num_points, 3) )
-  print("point_cloud.shape", point_cloud.shape)
-  
-  #### PointNET ++ 
-  #l0_xyz = tf.slice(point_cloud, [0,0,0], [-1,-1,3])
-  l0_xyz = point_cloud
-  l0_points = l0_xyz #tf.zeros(l0_xyz.shape) 
-  print("l0_xyz", l0_xyz)
-  print("l0_points", l0_points)
-
-  #with tf.variable_scope('transform_net1') as sc:
-  #  transform = input_transform_net(point_cloud, is_training, bn_decay, K=3)
-  #point_cloud_transformed = tf.matmul(point_cloud, transform)
-  #l0_transformed = point_cloud_transformed
-  #l0_transformed = tf.expand_dims(point_cloud_transformed)
-  #l0_transformed =
-  #print("l0_transformed", l0_transformed)
-  
-  # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int(num_points/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
-  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(num_points/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
-  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int(num_points/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
-  #l4_xyz, l4_points, l3_indices = pointnet_sa_module(l3_xyz, l3_points, npoint=int(num_points/sampled_points_down4), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer4')  
-
-  print("l1_points", l1_points)
-  print("l2_points", l2_points)
-  print("l3_points", l3_points)
-  
-  # Feature Propagation layers
-  #l3_points = pointnet_fp_module(l3_xyz, l4_xyz, l3_points, l4_points, [256], is_training, bn_decay, scope='fa_layer1')
-  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer2')
-  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer3')
-  l0_points = pointnet_fp_module(l0_xyz, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer4')
-
-  
-  print("l2_points", l2_points)
-  print("l1_points", l1_points)
-  print("l0_points", l0_points)
-  
-
-  # FC layers
-  net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
-  net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
-  net_last = net
-  #net = tf_util.dropout(net, keep_prob=0.6, is_training=is_training, scope='dp1')
-  net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
-
-  print("net_last", net_last.shape)
-  net_last = tf.reshape(net_last, (batch_size, seq_length, num_points,64 ))
-  end_points['last_d_feat'] = net_last 
+  # Add relative time-stamp to to point cloud
+  timestep_tensor = tf.zeros( (batch_size,1,original_num_points,1) )
+  for f in range(1, seq_length):
+    frame_tensor = tf.ones( (batch_size,1,original_num_points,1) ) * f
+    timestep_tensor = tf.concat( (timestep_tensor, frame_tensor) , axis = 1 )
     
-  print("net", net)
-  end_points['feats'] = net 
+    
+  num_points = original_num_points *seq_length
+  point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * original_num_points, 3) )
+  timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *original_num_points, 1, 1) )
+  print("point_cloud.shape", point_cloud.shape)
   
-  predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
+  with tf.variable_scope('transform_net1') as sc:
+    transform = input_transform_net(point_cloud, is_training, bn_decay, K=3)
+  point_cloud_transformed = tf.matmul(point_cloud, transform)
+  input_image = tf.expand_dims(point_cloud_transformed, -1)
+  
+  print("input_image", input_image)
+  print("timestep_tensor", timestep_tensor)
+  input_image = tf.concat( (input_image, timestep_tensor), axis =2 )
+  print("input_image", input_image)
+
+  
+  net = tf_util.conv2d(input_image, 64, [1,4],
+                      padding='VALID', stride=[1,1],
+                      bn=BN_FLAG, is_training=is_training,
+                      scope='conv1', bn_decay=bn_decay)
+  net = tf_util.conv2d(net, 64, [1,1],
+                      padding='VALID', stride=[1,1],
+                      bn=BN_FLAG, is_training=is_training,
+                      scope='conv2', bn_decay=bn_decay)
+  
+  print("[1] net", net)
+  with tf.variable_scope('transform_net2') as sc:
+      transform = feature_transform_net(net, is_training, bn_decay, K=64)
+  end_points['transform'] = transform
+  net_transformed = tf.matmul(tf.squeeze(net, axis=[2]), transform)
+  point_feat = tf.expand_dims(net_transformed, [2])
+
+  print("[2] point_feat", point_feat)
+  
+  net = tf_util.conv2d(point_feat, 64, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv3', bn_decay=bn_decay)
+  net = tf_util.conv2d(net, 128, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv4', bn_decay=bn_decay)
+  net = tf_util.conv2d(net, 1024, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv5', bn_decay=bn_decay)  
+  
+ 
+  print("num_points", num_points)
+  global_feat = tf_util.max_pool2d(net, [num_points,1],
+                                    padding='VALID', scope='maxpool')
+  print("global_feat", global_feat)
+
+  global_feat_expand = tf.tile(global_feat, [1, num_points*1, 1, 1])
+  #concat_feat = tf.concat(3, [point_feat, global_feat_expand])
+  concat_feat = tf.concat( (point_feat, global_feat_expand), axis =3 )
+  print("concat_feat", concat_feat)
+
+  net = tf_util.conv2d(concat_feat, 512, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv6', bn_decay=bn_decay)
+  net = tf_util.conv2d(net, 256, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv7', bn_decay=bn_decay)
+  net = tf_util.conv2d(net, 128, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv8', bn_decay=bn_decay)
+  net_last = tf_util.conv2d(net, 50, [1,1],
+                        padding='VALID', stride=[1,1],
+                        bn=BN_FLAG, is_training=is_training,
+                        scope='conv9', bn_decay=bn_decay)
+
+  net = tf_util.conv2d(net_last, 2, [1,1],
+                        padding='VALID', stride=[1,1], activation_fn=None,
+                         is_training=is_training, scope='conv10')
+  
+  print("net", net)
+
+  
+  net = tf.squeeze(net, [2]) # BxNxC
+
+  print("net", net)
+  
+  net_last =  tf.reshape(net_last, (batch_size, seq_length, original_num_points,50 ))
+  print("net_last", net_last) # (batch, frames, npoints, dims)
+  
+  end_points['last_d_feat'] = net_last 
+  end_points['points'] = point_cloud 
+  
+  predicted_labels = tf.reshape(net, (batch_size,seq_length,original_num_points, 2) )
   print("predicted_labels", predicted_labels)
-
-
   return predicted_labels, end_points
        
 
@@ -143,15 +185,16 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
     labels = tf.cast(labels, tf.int32)
 
     frame_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    
     frame_loss = tf.reduce_mean(frame_loss)
     sequence_loss = sequence_loss + frame_loss  	
   	
-  sequence_loss = sequence_loss/(seq_length )
+  sequence_loss = sequence_loss/(seq_length)
   return sequence_loss 
   
 
- 
 def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
+
   """ Calculate balanced loss 
    inputs: predicted labels : 
    	   ground_truth_labels: (batch, seq_length, num_points, 1)
@@ -192,8 +235,8 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
     
     print("mask_0", mask_0)
     print("frame_loss", frame_loss)
-    frame_loss_0 = frame_loss * mask_0 * 0.5 # worth less
-    frame_loss_1 = frame_loss * mask_1 * 1.5 # worth more
+    frame_loss_0 = frame_loss * mask_0 * 0.7 # worth less
+    frame_loss_1 = frame_loss * mask_1 * 1.3 # worth more
     frame_loss = frame_loss_0 + frame_loss_1
 
     frame_loss = tf.reduce_mean(frame_loss)
@@ -201,4 +244,3 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
   	
   sequence_loss = sequence_loss/(seq_length)
   return sequence_loss  
-

@@ -56,7 +56,7 @@ class MMW(object):
             npy_files = os.listdir(root)
 
             # for fast debug
-            #npy_files = [ "run_labelled_mmw_run_4.npy"]
+            #npy_files =  ['labels_run_51.npy']
             #npy_files = npy_files[0] 
             
             #Repeat array To futher augument
@@ -95,7 +95,7 @@ class MMW(object):
                 # For each frame
                 for frame in range (0, npy_run.shape[0] ):
                   npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
-                  npy_run[frame] =  shuffle_pc(npy_run[frame])
+                  #npy_run[frame] =  shuffle_pc(npy_run[frame])
                 
                 self.data.append(npy_run)
             
