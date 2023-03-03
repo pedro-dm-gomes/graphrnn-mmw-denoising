@@ -3,7 +3,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 """
-Implement a PointNet Architecture like the paper
+Implement a Basic GNN Architecture 
 
 """
 
@@ -13,11 +13,13 @@ sys.path.append(os.path.join(ROOT_DIR, 'modules'))
 sys.path.append(os.path.join(ROOT_DIR, 'modules/tf_ops/nn_distance'))
 sys.path.append(os.path.join(ROOT_DIR, 'modules/tf_ops/approxmatch'))
 sys.path.append(os.path.join(ROOT_DIR, 'modules/dgcnn_utils'))
+sys.path.append(os.path.join(ROOT_DIR,'modules/tf_ops/grouping'))
 
 from pointnet2_color_feat_states import *
 import graph_rnn_modules as modules
 import tf_util
 from transform_nets import input_transform_net, feature_transform_net
+from tf_grouping import query_ball_point, group_point, knn_point, knn_feat
 
 def placeholder_inputs(batch_size, seq_length, num_points):
   
@@ -50,7 +52,7 @@ def get_model(point_cloud, is_training, model_params):
   #Single Frame processing
   context_frames = 0
   
-  print("[Load Module]: ",graph_module_name) # PointNET++
+  print("[Load Module]: ",graph_module_name) # GNN
   
   print("point_cloud.shape", point_cloud.shape)
   point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * num_points, 3) )
@@ -60,42 +62,86 @@ def get_model(point_cloud, is_training, model_params):
   #l0_xyz = tf.slice(point_cloud, [0,0,0], [-1,-1,3])
   l0_xyz = point_cloud
   l0_points = l0_xyz #tf.zeros(l0_xyz.shape) 
+  l0_feats = l0_points
   print("l0_xyz", l0_xyz)
   print("l0_points", l0_points)
-
-  #with tf.variable_scope('transform_net1') as sc:
-  #  transform = input_transform_net(point_cloud, is_training, bn_decay, K=3)
-  #point_cloud_transformed = tf.matmul(point_cloud, transform)
-  #l0_transformed = point_cloud_transformed
-  #l0_transformed = tf.expand_dims(point_cloud_transformed)
-  #l0_transformed =
-  #print("l0_transformed", l0_transformed)
   
-  # Set Abstraction layers
-  l1_xyz, l1_points, l1_indices = pointnet_sa_module(l0_xyz, l0_points, npoint=int(num_points/sampled_points_down1), knn= True, radius=0.2, nsample=num_samples,  mlp=[64,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer1')
-  l2_xyz, l2_points, l2_indices = pointnet_sa_module(l1_xyz, l1_points, npoint=int(num_points/sampled_points_down2), knn= True, radius=0.4, nsample=num_samples, mlp=[128,128], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer2')
-  l3_xyz, l3_points, l3_indices = pointnet_sa_module(l2_xyz, l2_points, npoint=int(num_points/sampled_points_down3), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer3')  
-  #l4_xyz, l4_points, l3_indices = pointnet_sa_module(l3_xyz, l3_points, npoint=int(num_points/sampled_points_down4), knn= True, radius=None, nsample=num_samples, mlp=[128,256], mlp2=None, group_all=False, is_training=is_training, bn_decay=bn_decay, scope='layer4')  
-
-  print("l1_points", l1_points)
-  print("l2_points", l2_points)
-  print("l3_points", l3_points)
   
-  # Feature Propagation layers
-  #l3_points = pointnet_fp_module(l3_xyz, l4_xyz, l3_points, l4_points, [256], is_training, bn_decay, scope='fa_layer1')
-  l2_points = pointnet_fp_module(l2_xyz, l3_xyz, l2_points, l3_points, [256], is_training, bn_decay, scope='fa_layer2')
-  l1_points = pointnet_fp_module(l1_xyz, l2_xyz, l1_points, l2_points, [128], is_training, bn_decay, scope='fa_layer3')
-  l0_points = pointnet_fp_module(l0_xyz, l1_xyz, l0_points, l1_points, [128,128], is_training, bn_decay, scope='fa_layer4')
-
+  # Downsampling Layer 1
+  l1_xyz, l1_color, l1_feat, l1_states, _, _ = sample_and_group(int(num_points/sampled_points_down1), 
+                                                                radius=1.0+1e-8, 
+                                                                nsample= 1, 
+                                                                xyz=l0_xyz,  
+                                                                color=l0_xyz, 
+                                                                features=l0_points, 
+                                                                states = l0_points, 
+                                                                knn=True, 
+                                                                use_xyz=False) 
+  print("l1_xyz: ", l1_xyz)
+  print("l1_feat: ", l1_feat)
+  print("l1_states: ", l1_states)
   
-  print("l2_points", l2_points)
-  print("l1_points", l1_points)
-  print("l0_points", l0_points)
+  # Create adjacent matrix on cordinate space
+  l1_adj_matrix = tf_util.pairwise_distance(l1_xyz)
+  l1_nn_idx = tf_util.knn(l1_adj_matrix, k= num_samples) 
+  print("l1_adj_matrix:", l1_adj_matrix)
+  print("l1_nn_idx", l1_nn_idx)
+  
+  # Group Points
+  l1_xyx_grouped = group_point(l1_xyz, l1_nn_idx)  
+  print("l1_xyx_grouped:", l1_xyx_grouped)
+  #l1_feat_grouped = group_point(l1_feat, l1_nn_idx)     
+  #print("l1_feat_grouped:", l1_feat_grouped)
+  
+  # Calculate displacements
+  l1_xyz_expanded = tf.expand_dims(l1_xyz, 2)
+  l1_displacement = l1_xyx_grouped - l1_xyz_expanded   
+  print("l1_displacement:", l1_displacement)
+  print("l1_xyx_grouped:", l1_xyx_grouped)
+  
+  # Concatenate Message passing
+  concatenation = tf.concat([l1_xyx_grouped, l1_displacement], axis=3)   
+  print("concatenation", concatenation)
+  
+  # MLP message -passing
+  with tf.variable_scope('GNN_1') as sc:
+    l1_feats = tf_util.conv2d(concatenation, 
+                              64, [1,1], 
+                              padding='VALID', 
+                              stride=[1,1], bn=BN_FLAG,  
+                              is_training=is_training, 
+                              activation_fn= tf.nn.relu,
+                              scope = 'l1', 
+                              bn_decay=bn_decay)
+    l1_feats = tf.reduce_max(l1_feats, axis=[2], keepdims=False)
+        
+  print("l1_feats", l1_feats)
+
+  # Group Points
+  l1_feats_gropued = group_point(l1_feats, l1_nn_idx)  
+  
+  # Concatenate Message passing
+  concatenation = tf.concat([l1_xyx_grouped, l1_displacement, l1_feats_gropued], axis=3)   
+  print("concatenation", concatenation)
+  
+  # MLP message -passing
+  with tf.variable_scope('GNN_1') as sc:
+    l1_feats = tf_util.conv2d(concatenation, 
+                              128, [1,1], 
+                              padding='VALID', 
+                              stride=[1,1], bn=BN_FLAG,  
+                              is_training=is_training, 
+                              activation_fn= tf.nn.relu,
+                              scope = 'l2', 
+                              bn_decay=bn_decay)
+    l1_feats = tf.reduce_max(l1_feats, axis=[2], keepdims=False)
+        
+  print("l1_feats", l1_feats)
+  
   
 
   # FC layers
-  net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
-  net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
+  net = tf_util.conv1d(l1_feats, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
   net_last = net
   #net = tf_util.dropout(net, keep_prob=0.6, is_training=is_training, scope='dp1')
   net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
@@ -104,8 +150,6 @@ def get_model(point_cloud, is_training, model_params):
   net_last = tf.reshape(net_last, (batch_size, seq_length, num_points,64 ))
   end_points['last_d_feat'] = net_last 
     
-  print("net", net)
-  end_points['feats'] = net 
   
   predicted_labels = tf.reshape(net, (batch_size,seq_length,num_points, 2) )
   print("predicted_labels", predicted_labels)
@@ -150,7 +194,6 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
   return sequence_loss 
   
 
- 
 def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
   """ Calculate balanced loss 
    inputs: predicted labels : 

@@ -192,8 +192,8 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
     
     print("mask_0", mask_0)
     print("frame_loss", frame_loss)
-    frame_loss_0 = frame_loss * mask_0 * 0.7 # worth less
-    frame_loss_1 = frame_loss * mask_1 * 1.3 # worth more
+    frame_loss_0 = frame_loss * mask_0 * 0.65 # worth less
+    frame_loss_1 = frame_loss * mask_1 * 1.0 # worth more
     frame_loss = frame_loss_0 + frame_loss_1
 
     frame_loss = tf.reduce_mean(frame_loss)

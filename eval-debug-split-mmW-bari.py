@@ -282,7 +282,7 @@ def evaluate():
     # Add summary writers
     merged = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
-    test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'))
+    test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test_debug'))
 
     # Restore Session
     if (args.manual_restore == 0):
@@ -382,17 +382,14 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       #print_weights(sess, params, 82)
       
       """ Data Analyzes """
-      DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/'+ args.version +'/'
+      DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/'+ args.model + '_' + args.version +'/'
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
       
-      id_seq_to_visualize = [40,200,500]
+      id_seq_to_visualize = [40,200,500,600,700]
       
-      if(accuracy > 1.0):
-        print("add idx for visualization:", idx)
-        print("accuracy:", accuracy)
-        id_seq_to_visualize.append(idx)
       
       if( idx in id_seq_to_visualize):
+      #if( idx % 50 == 0):
         
         print("\Plot results for sequence: ", idx)
         
@@ -400,6 +397,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         input_point_clouds = input_point_clouds[0] # batch size is 1
         input_labels = input_labels[0]
         pred = pred[0]
+        print("last_d_feat.shape", last_d_feat.shape)
         last_d_feat = last_d_feat[0]
         pred_soft_max = np.exp(pred) / np.sum(np.exp(pred), axis=-1, keepdims=True)
 
@@ -452,7 +450,38 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
           row = row +1
         fig.suptitle("Input point cloud " + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/Stacked_"+ str(idx) + ".png")
-        
+        plt.close()
+
+        nr_subplots = SEQ_LENGTH
+        nr_rows = 4
+        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
+        S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
+        S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
+        S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        row = 0
+        # Plot Stacked Figure
+        fig = plt.figure(figsize=(10*nr_rows, 6))
+        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+          ax = fig.add_subplot(1,nr_rows,row+1)
+          if row ==0 : 
+            transparency = np.full((cor.shape[0], 1), 0.2)
+            cor_transparent = np.hstack((cor, transparency))
+            ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor_transparent)
+          else: 
+            ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor)
+          title = plot_titles[row]
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          ax.set_ylim([-5, 5])
+          row = row +1
+        fig.suptitle("Input point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/Stacked_transparent_"+ str(idx) + ".png")
+        plt.close()
+                
    
         
         #Plot Large Figure

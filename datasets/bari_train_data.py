@@ -57,26 +57,13 @@ class MMW(object):
 
             # for fast debug
             #npy_files =  ['labels_run_51.npy']
-            #npy_files = npy_files[0] 
-            
-            #Repeat array To futher augument
-            #npy_files =  np.repeat(npy_files, 2)
 
             for run in npy_files:
                 file_path = os.path.join(root, run)
                 #print("file_path", file_path)
                 npy_run = np.load(file_path)
-                #npy_run = npy_run[:, :, :, ]
-                #print("[LOAD TRAIN] 70% File_path", file_path)
-                #print("npy_run", npy_run.shape)
                 npy_run = npy_run[0]
 
-                
-                # Cut 70% of frames
-                #d_len = int(npy_run.shape[0]*0.7)
-                #npy_run = npy_run[:d_len]
-
-             
                 """  Augmented Dataset """
                 #Direction: (It can move backward)
                 direction = 1

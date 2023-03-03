@@ -48,21 +48,19 @@ def get_model(point_cloud, is_training, model_params):
   drop_rate = model_params['drop_rate']
   graph_module_name = model_params['graph_module']
   end_points = {}
-  
-  #Stacked Frames processing
-  context_frames = 0
   hop0 = 1
-  hop1 = 2
+  hop1 = 4
   hop2 = 8
-  hop3 = 12
-
-
+  hop3 =12
+  
+  #Single Frame processing
+  context_frames = 0
+  
   print("[Load Module]: ",graph_module_name) # GNN
   print("point_cloud.shape", point_cloud.shape)
   
   original_num_points = num_points
   num_points = original_num_points * seq_length
-  
   # Add relative time-stamp to to point cloud
   timestep_tensor = tf.zeros( (batch_size,1,original_num_points,1) )
   for f in range(1, seq_length):
@@ -72,35 +70,32 @@ def get_model(point_cloud, is_training, model_params):
   point_cloud = tf.reshape(point_cloud, (batch_size, seq_length * original_num_points, 3) )
   timestep_tensor = tf.reshape(timestep_tensor, (batch_size,seq_length *original_num_points, 1) )
   
-  """ -----  Layer 0    -----  """
+    
+  #### PointNET ++ 
+  #l0_xyz = tf.slice(point_cloud, [0,0,0], [-1,-1,3])
   l0_xyz = point_cloud
-  l0_feats = timestep_tensor
-  l0_feats = tf.concat( (l0_xyz,l0_feats) ,axis = 2)
-  hop0 = 1
+  l0_points = l0_xyz #tf.zeros(l0_xyz.shape) 
+  l0_points = timestep_tensor
+  l0_feats = l0_points
+  print("l0_xyz", l0_xyz)
+  print("l0_points", l0_points)
 
   # Create adjacent matrix on cordinate space
   l0_adj_matrix = tf_util.pairwise_distance(l0_xyz)
-  l0_nn_idx = tf_util.knn(l0_adj_matrix, k= int(num_samples * hop0) )   
+  l0_nn_idx = tf_util.knn(l0_adj_matrix, k= int(num_samples * hop0) ) 
   # Group Points
   l0_xyx_grouped = group_point(l0_xyz, l0_nn_idx) 
   l0_feats_grouped = group_point(l0_feats, l0_nn_idx)  
-  # Calculate Edge feature
+  # Calculate displacements
   l0_xyz_expanded = tf.expand_dims(l0_xyz, 2)
   l0_displacement = l0_xyx_grouped - l0_xyz_expanded  
-  l0_feats_expanded = tf.expand_dims(l0_feats, 2)
-  l0_feats_expanded = tf.tile(l0_feats_expanded, [1, 1, int(num_samples), 1])   
   l0_xyz_expanded = tf.tile(l0_xyz_expanded, [1, 1, int(num_samples), 1]) 
-  edge_feature = tf.concat([l0_feats_expanded,l0_feats_grouped, l0_displacement], axis=3)   
+  concatenation = tf.concat([l0_xyz_expanded,l0_xyx_grouped, l0_displacement, l0_feats_grouped], axis=3)   
+  print("concatenation", concatenation)
 
-  # ----  T- Net  ------ # Convert 3D cordinates to a new space
-  with tf.variable_scope('transform_net1') as sc:
-    transform = feature_transform_net(edge_feature, is_training, bn_decay, K=3)
-  l0_xyz_transformed = tf.matmul(l0_xyz, transform)
-  print("l0_xyz_transformed", l0_xyz_transformed)
-  
-  # GNN layer 1
+  # MLP message -passing
   with tf.variable_scope('GNN_0') as sc:
-    l0_feats = tf_util.conv2d(edge_feature, 
+    l0_feats = tf_util.conv2d(concatenation, 
                               64, [1,1], 
                               padding='VALID', 
                               stride=[1,1], bn=BN_FLAG,  
@@ -117,34 +112,38 @@ def get_model(point_cloud, is_training, model_params):
                               scope = 'l2', 
                               bn_decay=bn_decay)
     l0_feats = tf.reduce_max(l0_feats, axis=[2], keepdims=False)
-
+  
   """ -----  Layer 1    -----  """
-  l1_xyz = l0_xyz # original point cloud cordinates
+  l1_xyz = l0_xyz
   l1_feats = l0_feats 
-
-
-  # Create adjacent matrix on new cordinate spa ce
-  l1_adj_matrix = tf_util.pairwise_distance(l1_xyz)
-  l1_nn_idx = tf_util.knn(l1_adj_matrix, k= num_samples*hop1) 
+  
+  # Create adjacent matrix on cordinate space
+  #l1_adj_matrix = tf_util.pairwise_distance(l0_xyz)
+  l1_adj_matrix = l0_adj_matrix
+  l1_nn_idx = tf_util.knn(l1_adj_matrix, k= num_samples* hop1) 
+  print("l1_adj_matrix:", l1_adj_matrix)
   print("l1_nn_idx", l1_nn_idx)
-  l1_nn_idx = l1_nn_idx[:,:,num_samples*(hop1-1):] # 2-hop neighborhood
+  l1_nn_idx = l1_nn_idx[:,:,num_samples*( hop1 -1):]
   print("l1_nn_idx", l1_nn_idx)
   # Group Points
   l1_xyx_grouped = group_point(l1_xyz, l1_nn_idx) 
   l1_feat_grouped = group_point(l1_feats, l1_nn_idx)  
+  print("l1_xyx_grouped:", l1_xyx_grouped)
   # Calculate displacements
   l1_xyz_expanded = tf.expand_dims(l1_xyz, 2)
-  l1_feat_expanded = tf.expand_dims(l1_feats, 2)
   l1_displacement = l1_xyx_grouped - l1_xyz_expanded  
   l1_xyz_expanded = tf.tile(l1_xyz_expanded, [1, 1, num_samples, 1]) 
-  l1_feat_expanded = tf.tile(l1_feat_expanded, [1, 1, num_samples, 1]) 
+  print("l1_xyz_expanded:", l1_xyz_expanded) 
+  print("l1_displacement:", l1_displacement)
+  print("l1_xyx_grouped:", l1_xyx_grouped)
   
   # Concatenate Message passing
-  edge_feature = tf.concat([l1_feat_expanded, l1_feat_grouped, l1_displacement], axis=3)   
+  concatenation = tf.concat([l1_xyz_expanded,l1_xyx_grouped, l1_displacement, l1_feat_grouped], axis=3)   
+  print("concatenation", concatenation)
   
   # MLP message -passing
   with tf.variable_scope('GNN_1') as sc:
-    l1_feats = tf_util.conv2d(edge_feature, 
+    l1_feats = tf_util.conv2d(concatenation, 
                               64, [1,1], 
                               padding='VALID', 
                               stride=[1,1], bn=BN_FLAG,  
@@ -161,33 +160,31 @@ def get_model(point_cloud, is_training, model_params):
                               scope = 'l2', 
                               bn_decay=bn_decay)
     l1_feats = tf.reduce_max(l1_feats, axis=[2], keepdims=False)
-    
+
   print("l1_feats", l1_feats)
-  
+    
   """ -----  Layer 2    -----  """
   l2_xyz = l1_xyz
   l2_feats = l1_feats
-
-
   # Create adjacent matrix on cordinate space
   l2_adj_matrix = tf_util.pairwise_distance(l2_xyz)
   l2_nn_idx = tf_util.knn(l2_adj_matrix, k= num_samples * hop2) 
-  l2_nn_idx = l2_nn_idx[:,:, num_samples*(hop2-1):] # 2-hop neighborhood
+  print("l2_nn_idx", l1_nn_idx)
+  l2_nn_idx = l2_nn_idx[:,:,num_samples*(hop2-1):]
+  print("l2_nn_idx", l2_nn_idx)
   # Group Points
   l2_xyx_grouped = group_point(l2_xyz, l2_nn_idx)  
-  l2_feats_grouped = group_point(l2_feats, l2_nn_idx)  
+  l2_feats_gropued = group_point(l2_feats, l2_nn_idx)  
   # Calculate displacements
   l2_xyz_expanded = tf.expand_dims(l2_xyz, 2)
-  l2_feat_expanded = tf.expand_dims(l2_feats, 2)
   l2_displacement = l2_xyx_grouped - l2_xyz_expanded   
   l2_xyz_expanded = tf.tile(l2_xyz_expanded, [1, 1, num_samples, 1]) 
-  l2_feat_expanded = tf.tile(l2_feat_expanded, [1, 1, num_samples, 1]) 
   # Concatenate Message passing
-  edge_feature = tf.concat([l2_feat_expanded, l2_feats_grouped, l2_displacement], axis=3)     
+  concatenation = tf.concat([l2_displacement, l2_feats_gropued], axis=3)     
   
   # MLP message -passing
   with tf.variable_scope('GNN_2') as sc:
-    l2_feats = tf_util.conv2d(edge_feature, 
+    l2_feats = tf_util.conv2d(concatenation, 
                               64, [1,1], 
                               padding='VALID', 
                               stride=[1,1], bn=BN_FLAG,  
@@ -203,33 +200,34 @@ def get_model(point_cloud, is_training, model_params):
                               activation_fn= tf.nn.relu,
                               scope = 'l2', 
                               bn_decay=bn_decay)
-    
-  l2_feats = tf.reduce_max(l2_feats, axis=[2], keepdims=False)
+    l2_feats = tf.reduce_max(l2_feats, axis=[2], keepdims=False)
+        
+  print("l2_feats", l2_feats)
   
   """ -----  Layer 3    -----  """
   l3_xyz = l2_xyz
   l3_feats = l2_feats
-
+  
   # Create adjacent matrix on cordinate space
   l3_adj_matrix = tf_util.pairwise_distance(l3_xyz)
-  l3_nn_idx = tf_util.knn(l3_adj_matrix, k= num_samples *hop3) 
-  l3_nn_idx = l3_nn_idx[:,:, num_samples*(hop3-1):] # n-hop neighborhood
+  l3_nn_idx = tf_util.knn(l3_adj_matrix, k= num_samples*hop3) 
+  print("l3_nn_idx", l3_nn_idx)
+  l3_nn_idx = l3_nn_idx[:,:,num_samples*(hop3-1):]
+  print("l3_nn_idx", l3_nn_idx)
   # Group Points
   l3_xyx_grouped = group_point(l3_xyz, l3_nn_idx) 
   l3_feats_grouped =   group_point(l3_feats, l3_nn_idx) 
   # Calculate displacements
   l3_xyz_expanded = tf.expand_dims(l3_xyz, 2)
-  l3_feat_expanded = tf.expand_dims(l3_feats, 2)
   l3_displacement = l3_xyx_grouped - l3_xyz_expanded   
-  l3_xyz_expanded = tf.tile(l3_xyz_expanded, [1, 1, num_samples, 1]) 
-  l3_feat_expanded = tf.tile(l3_feat_expanded, [1, 1, num_samples, 1]) 
+  l3_xyz_expanded = tf.tile(l3_xyz_expanded, [1, 1, num_samples *4, 1]) 
   
   # Concatenate Message passing
-  edge_feature = tf.concat([l3_feat_expanded, l3_feats_grouped, l3_displacement ], axis=3)   
-  print("edge_feature", edge_feature)
+  concatenation = tf.concat([l3_displacement,l3_feats_grouped ], axis=3)   
+  
   # MLP message -passing
   with tf.variable_scope('GNN_3') as sc:
-    l3_feats = tf_util.conv2d(edge_feature, 
+    l3_feats = tf_util.conv2d(concatenation, 
                               64, [1,1], 
                               padding='VALID', 
                               stride=[1,1], bn=BN_FLAG,  
@@ -251,35 +249,28 @@ def get_model(point_cloud, is_training, model_params):
   print("l3_feats", l3_feats)
   
   # Global feature Representation 
-  global_concatenation =  tf.concat( (l0_feats, l1_feats, l2_feats,l3_feats) , axis=2 )
-  global_concatenation =  tf.expand_dims(global_concatenation, 2)
+  full_concatenation =  tf.concat( (l0_feats, l1_feats, l2_feats,l3_feats) , axis=2 )
+  print("full_concatenation", full_concatenation)
   
   """ --- Global Representation  ---"""
-  #global_feat = tf_util.conv2d(global_concatenation, 256, [1,1], padding='VALID',stride=[1,1],  bn=BN_FLAG, is_training=is_training, scope='g_fc1', bn_decay=bn_decay)
-  global_feat = tf_util.conv2d(global_concatenation, 512, [1,1], padding='VALID',stride=[1,1],  bn=BN_FLAG, is_training=is_training, scope='g_fc2', bn_decay=bn_decay)
-  global_feat = tf_util.conv2d(global_feat, 1024, [1,1], padding='VALID',stride=[1,1],  bn=BN_FLAG, is_training=is_training, scope='g_fc3', bn_decay=bn_decay)
-  global_feat = tf.reduce_max(global_feat, axis=[1], keepdims=False)
+  global_feat = tf_util.conv1d(full_concatenation, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='g_fc1', bn_decay=bn_decay)
+  global_feat = tf_util.conv1d(global_feat, 512, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='g_fc2', bn_decay=bn_decay)
+  global_feat = tf_util.conv1d(global_feat, 1024, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='g_fc3', bn_decay=bn_decay)
+  global_feat = tf.reduce_max(global_feat, axis=[1], keepdims=True)
+  print("global_feat", global_feat)
   
   #Concate global representation with full concatenation
-  global_feat_repeat = tf.tile(global_feat, [1, global_concatenation.shape[1], 1])
-  print("global_concatenation", global_concatenation)
-  print("global_feat_repeat", global_feat_repeat)
-  global_concatenation = tf.reshape(global_concatenation,(global_feat_repeat.shape[0],global_feat_repeat.shape[1], global_concatenation.shape[3] ) )
-  print("global_concatenation", global_concatenation)
-  concatenation = tf.concat( (global_concatenation, global_feat_repeat) , axis=2 )
+  global_feat_repeat = tf.tile(global_feat, [1, full_concatenation.shape[1], 1])
+  
+  concatenation = tf.concat( (full_concatenation, global_feat_repeat) , axis=2 )
   print("concatenation", concatenation)
   
 
-  concatenation = tf_util.dropout(concatenation, keep_prob=0.75, is_training=is_training, scope='dp1')
-  net = tf_util.conv1d(concatenation, 512, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc0', bn_decay=bn_decay)
-  net = tf_util.dropout(net, keep_prob=0.65, is_training=is_training, scope='dp2')
-  net = tf_util.conv1d(net, 256, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
+  net = tf_util.conv1d(concatenation, 512, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
   net = tf_util.conv1d(net, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
-  net = tf_util.dropout(net, keep_prob=0.60, is_training=is_training, scope='dp3')
   net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc3', bn_decay=bn_decay)
   net_last =  net
   predicted_labels = tf_util.conv1d(net, 2, 1, padding='VALID',activation_fn=None, bn=BN_FLAG, is_training=is_training, scope='fc4', bn_decay=bn_decay)
-  
   print("predicted_labels", predicted_labels)
   print("net_last", net_last)
   net_last =  tf.reshape(net_last, (batch_size, seq_length, original_num_points, 64 ))
