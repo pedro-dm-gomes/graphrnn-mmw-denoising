@@ -6,8 +6,8 @@ import argparse
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-from datasets.bari_train_data import MMW as Dataset_mmW
-from datasets.bari_test_data import MMW as Dataset_mmW_eval
+from datasets.bari_train_double_data import MMW as Dataset_mmW
+from datasets.bari_test_double_data import MMW as Dataset_mmW_eval
 import importlib
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -22,8 +22,8 @@ sys.path.append(os.path.join(BASE_DIR, 'models'))
 parser = argparse.ArgumentParser()
 """ --  Training  hyperparameters --- """
 parser.add_argument('--gpu', default='0', help='Select GPU to run code [default: 0]')
-parser.add_argument('--data-dir', default='/home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset', help='Dataset directory')
-parser.add_argument('--batch-size', type=int, default=409, help='Batch Size during training [default: 16]')
+parser.add_argument('--data-dir', default='/scratch/uceepdg/Labelled_mmW', help='Dataset directory')
+parser.add_argument('--batch-size', type=int, default=1, help='Batch Size during training [default: 16]')
 parser.add_argument('--data-split', type=int, default=0, help='Select the train/test/ data split  [default: 0,1,2]')
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
 parser.add_argument('--learning-rate', type=float, default=0.0, help='Learning rate [default: 1e-4]')
@@ -45,9 +45,9 @@ parser.add_argument('--num-points', type=int, default=200, help='Number of point
 parser.add_argument('--step-length', type=float, default=0.1, help='Step length [default: 0.1]')
 parser.add_argument('--log-dir', default='outputs', help='Log dir [default: outputs/mmw]')
 parser.add_argument('--version', default='v0', help='Model version')
-parser.add_argument('--down-points1', type= float , default = 2 , help='[default:2 #points layer 1')
-parser.add_argument('--down-points2', type= float , default = 2*2 , help='[default:2 #points layer 2')
-parser.add_argument('--down-points3', type= float , default = 2*2*2, help='[default:2 #points layer 3')
+parser.add_argument('--down-points1', type= int , default = 2 , help='[default:2 #points layer 1')
+parser.add_argument('--down-points2', type= int , default = 2*2 , help='[default:2 #points layer 2')
+parser.add_argument('--down-points3', type= int , default = 2*2*2, help='[default:2 #points layer 3')
 parser.add_argument('--context-frames', type= int , default = 1, help='[default:1 #contex framres')
 parser.add_argument('--manual-restore', type= int , default = 0, help='[default:1 #contex framres')
 parser.add_argument('--restore-ckpt', type= int , default = 76, help='[default:1 #contex framres')
@@ -73,6 +73,8 @@ os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 BATCH_SIZE = args.batch_size
 NUM_POINTS = args.num_points
 SEQ_LENGTH = args.seq_length
+
+DATA_SPLIT = args.data_split
 
 BASE_LEARNING_RATE = args.learning_rate
 DECAY_STEP = args.decay_step
@@ -109,7 +111,7 @@ for var in args.__dict__:
 test_dataset = Dataset_mmW_eval(root=args.data_dir,
                         seq_length= args.seq_length,
                         num_points=args.num_points,
-                        split_number = args.data_split,
+                        split_number = DATA_SPLIT,
                         train= False)
 
 def get_classification_metrics(predicted_labels, ground_truth_labels, batch_size, seq_length,num_points,context_frames ): 
@@ -224,7 +226,7 @@ def evaluate():
   with tf.Graph().as_default():
     
     is_training_pl = tf.placeholder(tf.bool, shape=())
-    pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, SEQ_LENGTH, NUM_POINTS)
+    pointclouds_pl, rotated_pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, SEQ_LENGTH, NUM_POINTS)
 
   
     print("pointclouds_pl", pointclouds_pl)
@@ -248,7 +250,7 @@ def evaluate():
   	   	    'sampled_points_down2':int(args.down_points2),
   	   	    'sampled_points_down3':int(args.down_points3)}
 
-    pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
+    pred, end_points = MODEL.get_model(pointclouds_pl, rotated_pointclouds_pl, is_training_pl, model_params)
     
 
     loss = MODEL.get_loss(pred, labels_pl, context_frames = model_params['context_frames'])
@@ -289,6 +291,13 @@ def evaluate():
     # Restore Session
     if (args.manual_restore == 0):
       checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      """
+      BEST_MODEL_DIR = os.path.join(LOG_DIR, 'best_model')
+      if  os.path.exists(BEST_MODEL_DIR): 
+        print("--Load best model ----")
+        checkpoint_path_automatic = tf.train.latest_checkpoint(BEST_MODEL_DIR)
+      else:   checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      """
       ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
       restore_checkpoint_path = checkpoint_path_automatic
       ckpt_number=ckpt_number[11:]
@@ -308,15 +317,16 @@ def evaluate():
     tf.set_random_seed(ckpt_number)
 
     ops = {'pointclouds_pl': pointclouds_pl,
-  	   'labels_pl': labels_pl,
-  	   'is_training_pl': is_training_pl,
-  	   'pred': pred,
-  	   'loss': loss,
-  	   'acc':accuracy,
-  	   'params': params,
-  	   'merged': merged,
-       'end_points': end_points,
-  	   'step': batch}
+  	      'rotated_pointclouds_pl': rotated_pointclouds_pl, 
+          'labels_pl': labels_pl,
+          'is_training_pl': is_training_pl,
+          'pred': pred,
+          'loss': loss,
+          'acc':accuracy,
+          'params': params,
+          'merged': merged,
+          'end_points': end_points,
+          'step': batch}
 
     
     for epoch in range(ckpt_number, ckpt_number + 1):
@@ -353,23 +363,31 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       end_idx = (batch_idx+1) * BATCH_SIZE
       cur_batch_size = end_idx - start_idx
       input_point_clouds =[]
+      input_rotated_point_clouds = []
       input_labels =[]
     
       for idx  in range(start_idx,end_idx): #sequences to be tested
         test_seq = test_dataset[idx]   
         test_seq =np.array(test_seq)
         point_clouds = test_seq[:,:,0:3]
+        rotated_point_clouds = test_seq[:,:,4:7]
         labels = test_seq[:,:,3:4]
         input_point_clouds.append(point_clouds)
+        input_rotated_point_clouds.append(rotated_point_clouds)
         input_labels.append(labels)
       
       input_point_clouds = np.array(input_point_clouds)
+      input_rotated_point_clouds= np.array(input_rotated_point_clouds)
       input_labels = np.array(input_labels)
-#
+      
+      
+
       # Send to model to be evaluated
-      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['rotated_pointclouds_pl']: input_rotated_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+
       pred, summary, step, loss, accuracy, params, end_points =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['loss'], ops['acc'], ops['params'] , ops['end_points']], feed_dict=feed_dict) 
-      #test_writer.add_summary(summary, step)  # Do not write to tensroboard      
+      #test_writer.add_summary(summary, step)  # Do not write to tensroboard
+      
       total_accuracy = total_accuracy + accuracy
       total_loss = total_loss + loss
       accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
@@ -386,24 +404,21 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
       
       id_seq_to_visualize = [40,200,500,600,700]
-      TNET_FLAG = False
+      TC_MODULE_FLAG = True
       
       if( idx in id_seq_to_visualize):
       #if( idx % 50 == 0):
         
         print("\Plot results for sequence: ", idx)
-        #Special case# there is a T-NET
-        if (TNET_FLAG == True):
-          print(" --- Using T-net")
-          l0_xyz_transformed = end_points['l0_xyz_transformed']
-          print("l0_xyz_transformed", l0_xyz_transformed.shape)
-          l0_xyz_transformed = l0_xyz_transformed[0]
-          transform = end_points['transform']
-          print("transform", transform)
         
-        
+        if TC_MODULE_FLAG == True:
+          last_temp_feat = end_points['last_temp_feat']
+          print("last_temp_feat.shape", last_temp_feat.shape)
+          last_temp_feat = last_temp_feat[0]
+          
         last_d_feat = end_points['last_d_feat']
         input_point_clouds = input_point_clouds[0] # batch size is 1
+        input_rotated_point_clouds = input_rotated_point_clouds[0] 
         input_labels = input_labels[0]
         pred = pred[0]
         print("last_d_feat.shape", last_d_feat.shape)
@@ -417,6 +432,17 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         feat_pca = pca.fit_transform(last_d_feat)
         feat_cor = normalize_pca_to_color(feat_pca)
         feat_cor = np.reshape(feat_cor,  (SEQ_LENGTH, NUM_POINTS, 3 ))
+
+        if TC_MODULE_FLAG == True:
+          last_temp_feat = np.reshape(last_temp_feat, (SEQ_LENGTH*NUM_POINTS,last_temp_feat.shape[2] ) )
+          pca = PCA(n_components=3)
+          temp_feat_pca = np.zeros((last_temp_feat.shape[0], 3) )
+          temp_feat_pca = pca.fit_transform(last_temp_feat)
+          temp_feat_cor = normalize_pca_to_color(temp_feat_pca)
+          temp_feat_cor = np.reshape(temp_feat_cor,  (SEQ_LENGTH, NUM_POINTS, 3 ))
+        else:
+          temp_feat_cor = np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+            
           
         #Convert the labels into color
         cor_labels = np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
@@ -437,17 +463,18 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         
         """ Save Images """
         nr_subplots = SEQ_LENGTH
-        nr_rows = 4
-        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
         S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
         S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
         S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_temp_feat_cor = np.reshape(temp_feat_cor, S_cor_labels.shape )
         S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
         S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
         row = 0
         # Plot Stacked Figure
         fig = plt.figure(figsize=(10*nr_rows, 6))
-        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+        for cor in [S_cor_labels,S_temp_feat_cor, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
           ax = fig.add_subplot(1,nr_rows,row+1)
           ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor)
           title = plot_titles[row]
@@ -462,8 +489,8 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         plt.close()
 
         nr_subplots = SEQ_LENGTH
-        nr_rows = 4
-        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
         S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
         S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
         S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
@@ -472,7 +499,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         row = 0
         # Plot Stacked Figure
         fig = plt.figure(figsize=(10*nr_rows, 6))
-        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+        for cor in [S_cor_labels,S_temp_feat_cor,S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
           ax = fig.add_subplot(1,nr_rows,row+1)
           if row ==0 : 
             transparency = np.full((cor.shape[0], 1), 0.2)
@@ -485,15 +512,15 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
           ax.set_xlabel("X-axis")
           ax.set_ylabel("Y-axis")
           ax.set_xlim([-5, 5])
-          ax.set_ylim([-5, 5])
+          #ax.set_ylim([-5, 5])
           row = row +1
         fig.suptitle("Input point cloud " + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/Stacked_transparent_"+ str(idx) + ".png")
         plt.close()
 
         nr_subplots = SEQ_LENGTH
-        nr_rows = 4
-        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
         S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
         S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
         S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
@@ -502,7 +529,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         row = 0
         # Plot Stacked Figure
         fig = plt.figure(figsize=(10*nr_rows, 6))
-        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+        for cor in [S_cor_labels,S_temp_feat_cor,S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
           ax = fig.add_subplot(1,nr_rows,row+1)
           if row ==0 : 
             transparency = np.full((cor.shape[0], 1), 0.2)
@@ -513,75 +540,106 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
           title = plot_titles[row]
           ax.set_title(title)
           ax.set_xlabel("X-axis")
-          ax.set_ylabel("Z-axis")
+          ax.set_ylabel("Y-axis")
           ax.set_xlim([-5, 5])
           #ax.set_ylim([-5, 5])
           row = row +1
         fig.suptitle("Input point cloud " + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/Stacked_XZ_transparent_"+ str(idx) + ".png")
         plt.close()
+        
+        nr_subplots = SEQ_LENGTH
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        S_input_rotated_point_clouds =  np.reshape(input_rotated_point_clouds, (input_rotated_point_clouds.shape[0]* input_rotated_point_clouds.shape[1], input_rotated_point_clouds.shape[2]) )
+        S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
+        S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
+        S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        row = 0
+        # Plot Stacked Figure
+        fig = plt.figure(figsize=(10*nr_rows, 6))
+        for cor in [S_cor_labels, S_temp_feat_cor, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+          ax = fig.add_subplot(1,nr_rows,row+1)
+          if row ==0 : 
+            transparency = np.full((cor.shape[0], 1), 0.2)
+            cor_transparent = np.hstack((cor, transparency))
+            ax.scatter(S_input_rotated_point_clouds[:,0], S_input_rotated_point_clouds[:,1], c= cor_transparent)
+          else: 
+            ax.scatter(S_input_rotated_point_clouds[:,0], S_input_rotated_point_clouds[:,1], c= cor)
+          title = plot_titles[row]
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Y-axis")
+          ax.set_xlim([-5, 5])
+          #ax.set_ylim([-5, 5])
+          row = row +1
+        fig.suptitle("Input point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/Rotated_XY_Stacked_transparent_"+ str(idx) + ".png")
+        plt.close()
                         
-        if (TNET_FLAG == True):        
-          nr_subplots = SEQ_LENGTH
-          nr_rows = 4
-          plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
-          S_input_point_clouds = l0_xyz_transformed        
-          S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
-          S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
-          S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
-          S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
-          row = 0
-          # Plot Stacked Figure
-          fig = plt.figure(figsize=(10*nr_rows, 6))
-          for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
-            ax = fig.add_subplot(1,nr_rows,row+1)
-            if row ==0 : 
-              transparency = np.full((cor.shape[0], 1), 0.2)
-              cor_transparent = np.hstack((cor, transparency))
-              ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor_transparent)
-            else: 
-              ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor)
-            title = plot_titles[row]
-            ax.set_title(title)
-            ax.set_xlabel("X-axis")
-            ax.set_ylabel("Y-axis")
-            #ax.set_xlim([-5, 5])
-            #ax.set_ylim([-5, 5])
-            row = row +1
-          fig.suptitle("Input point cloud " + str(idx), fontsize=16)
-          fig.savefig(DATA_DIR+"/Stacked_after_TNET_transparent_"+ str(idx) + ".png")
-          plt.close()
 
-          nr_subplots = SEQ_LENGTH
-          nr_rows = 4
-          plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
-          S_input_point_clouds = l0_xyz_transformed        
-          S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
-          S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
-          S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
-          S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
-          row = 0
-          # Plot Stacked Figure
-          fig = plt.figure(figsize=(10*nr_rows, 6))
-          for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
-            ax = fig.add_subplot(1,nr_rows,row+1)
-            if row ==0 : 
-              transparency = np.full((cor.shape[0], 1), 0.2)
-              cor_transparent = np.hstack((cor, transparency))
-              ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,2], c= cor_transparent)
-            else: 
-              ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,2], c= cor)
-            title = plot_titles[row]
-            ax.set_title(title)
-            ax.set_xlabel("X-axis")
-            ax.set_ylabel("Z-axis")
-            #ax.set_xlim([-5, 5])
-            #ax.set_ylim([-5, 5])
-            row = row +1
-          fig.suptitle("Input point cloud " + str(idx), fontsize=16)
-          fig.savefig(DATA_DIR+"/Stacked_after_TNET_XZ_transparent_"+ str(idx) + ".png")
-          plt.close()
-                             
+        nr_subplots = SEQ_LENGTH
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        S_input_rotated_point_clouds =  np.reshape(input_rotated_point_clouds, (input_rotated_point_clouds.shape[0]* input_rotated_point_clouds.shape[1], input_rotated_point_clouds.shape[2]) )
+        S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
+        S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
+        S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        row = 0
+        # Plot Stacked Figure
+        fig = plt.figure(figsize=(10*nr_rows, 6))
+        for cor in [S_cor_labels, S_temp_feat_cor, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+          ax = fig.add_subplot(1,nr_rows,row+1)
+          if row ==0 : 
+            transparency = np.full((cor.shape[0], 1), 0.2)
+            cor_transparent = np.hstack((cor, transparency))
+            ax.scatter(S_input_rotated_point_clouds[:,0], S_input_rotated_point_clouds[:,2], c= cor_transparent)
+          else: 
+            ax.scatter(S_input_rotated_point_clouds[:,0], S_input_rotated_point_clouds[:,2], c= cor)
+          title = plot_titles[row]
+          ax.set_title(title)
+          ax.set_xlabel("X-axis")
+          ax.set_ylabel("Z-axis")
+          ax.set_xlim([-5, 5])
+          #ax.set_ylim([-5, 5])
+          row = row +1
+        fig.suptitle("Input point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/Rotated_XZ_Stacked_transparent_"+ str(idx) + ".png")
+        plt.close()
+                        
+
+        nr_subplots = SEQ_LENGTH
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'temp_feat', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        S_input_rotated_point_clouds =  np.reshape(input_rotated_point_clouds, (input_rotated_point_clouds.shape[0]* input_rotated_point_clouds.shape[1], input_rotated_point_clouds.shape[2]) )
+        S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
+        S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
+        S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
+        S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        row = 0
+        # Plot Stacked Figure
+        fig = plt.figure(figsize=(10*nr_rows, 6))
+        for cor in [S_cor_labels, S_temp_feat_cor, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+          ax = fig.add_subplot(1,nr_rows,row+1)
+          if row ==0 : 
+            transparency = np.full((cor.shape[0], 1), 0.2)
+            cor_transparent = np.hstack((cor, transparency))
+            ax.scatter(S_input_rotated_point_clouds[:,1], S_input_rotated_point_clouds[:,2], c= cor_transparent)
+          else: 
+            ax.scatter(S_input_rotated_point_clouds[:,1], S_input_rotated_point_clouds[:,2], c= cor)
+          title = plot_titles[row]
+          ax.set_title(title)
+          ax.set_xlabel("Y-axis")
+          ax.set_ylabel("Z-axis")
+          ax.set_xlim([-5, 5])
+          #ax.set_ylim([-5, 5])
+          row = row +1
+        fig.suptitle("Input point cloud " + str(idx), fontsize=16)
+        fig.savefig(DATA_DIR+"/Rotated_YZ_Stacked_transparent_"+ str(idx) + ".png")
+        plt.close()
+                                   
         
         #Plot Large Figure
         nr_rows = 4
@@ -594,7 +652,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
             title = plot_titles[row]+ ' frame:' + str(f)
             ax.set_title(title)
             ax.set_xlim([-5, 5])
-            ax.set_ylim([-5, 5])
+            #ax.set_ylim([-5, 5])
           row = row +1
         
         fig.suptitle("Sequence" + str(idx), fontsize=16)
