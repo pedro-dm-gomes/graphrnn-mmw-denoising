@@ -2,28 +2,6 @@ import os
 import numpy as np
 
 
-def get_dataset_split(split_number):
-    
-    if (split_number == -1): # For Fast Debug
-            test_npy_files =  [3,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65]
-
-    if (split_number == 0): # Standart Split
-            test_npy_files =  [3,7,49,55,57,68,70]
-
-    if (split_number == 1):
-            test_npy_files = [4,8,53,56,62,67,69]
-
-    if (split_number == 2):
-            test_npy_files = [6,9,51,58,59,63,66,65]
-
-            
-    if (split_number == 7): # Walter current split - split 0 + 64
-            test_npy_files =  [3,7,49,55,57,64,68,70]
-            
-    test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
-
-    return test_npy_files
-
 class MMW(object):
     def __init__(
         self,
@@ -31,7 +9,6 @@ class MMW(object):
         seq_length=100,
         num_points=200,
         train=False,
-        split_number =0,               
     ):
 
         self.seq_length = seq_length
@@ -40,14 +17,11 @@ class MMW(object):
 
         log_nr = 0
         # print(" MMW DATASET ")
-        root = root + '/' +str(num_points)+ '/all_runs'
+        root = root + '/' +str(num_points)+ '/test'
         if not(train):
 
 
             npy_files = os.listdir(root)
-            test_npy_files = get_dataset_split(split_number)
-            npy_files = test_npy_files
-    
             # For each run calculate the limit
             for run in npy_files:
                 file_path = os.path.join(root, run)

@@ -48,6 +48,7 @@ def get_dataset_split(split_number):
             
     test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
 
+    
     return test_npy_files
 
 class MMW(object):
@@ -57,7 +58,7 @@ class MMW(object):
         seq_length=100,
         num_points=200,
         train=True,
-        split_number =0, 
+        split_number =0,
     ):
 
         self.seq_length = seq_length
@@ -65,59 +66,72 @@ class MMW(object):
         #print("num_points:", num_points)
         self.data = []
         
-        if ("Not_Rotated" in root):
-            ROTATED = False
-        else:
-            ROTATED = True
-            
+        print("Load data split:", split_number)
+        print("root:", root)
         
-        
-        log_nr = 0
-        root = root + '/' +str(num_points) + '/all_runs'
-        if train:
+        # Load not Rotated dataset 
+        root_original_mmW = root + '/Not_Rotated_dataset'
+        root_rotated_mmW = root + '/Rotated_dataset'
 
-            # load all files
-            all_npy_files = os.listdir(root)
-            #print("all_npy_files:", all_npy_files)
             
+            
+        log_nr = 0
+        root_original_mmW = root_original_mmW + '/' +str(num_points) + '/all_runs'
+        root_rotated_mmW = root_rotated_mmW + '/' +str(num_points) + '/all_runs'
+        
+        print("root_original_mmW", root_original_mmW)
+        if train:
+            
+            # load all files
+            all_npy_files = os.listdir(root_original_mmW)
+                        
             # Select the split of dataset
             test_npy_files = get_dataset_split(split_number)
             
+            print("\nTest files", test_npy_files)
+            
             # Remove test data from training set
             npy_files = [string for string in all_npy_files if string not in test_npy_files]
-            #print("npy_files:", npy_files)
             
-
+            print("\nTrain files", npy_files)
+            
             for run in npy_files:
-                file_path = os.path.join(root, run)
+                file_path_original_mmw = os.path.join(root_original_mmW, run)
+                file_path_rotated_mmw = os.path.join(root_rotated_mmW, run)
+                
                 #print("file_path", file_path)
-                npy_run = np.load(file_path)
-                npy_run = npy_run[0]
+                npy_run_mmw = np.load(file_path_original_mmw)
+                npy_run_mmw = npy_run_mmw[0]
 
+                npy_run_rotated_mmw = np.load(file_path_rotated_mmw)
+                npy_run_rotated_mmw = npy_run_rotated_mmw[0]
+                
                 """  Augmented Dataset """
                 #Direction: (It can move backward)
                 direction = 1
                 if np.random.rand() < 0.25: direction = -1
                 if (direction == -1):
-                	# Reverse Array order
-                	npy_run = np.flip(npy_run, axis = 0)
+                    # Reverse Array order
+                    npy_run_mmw = np.flip(npy_run_mmw, axis = 0)
+                    npy_run_rotated_mmw = np.flip(npy_run_rotated_mmw, axis = 0)
                 
                 # Rotate Translate and Jitter the point cloud
-                if ROTATED == True:
-                    angle =np.random.uniform(-4, 4)
-                    x  = np.random.uniform(-2, 2)
-                    y  =np.random.uniform(-2, 2)
-                else:
-                    angle = x = y =0  # Dont rotate and dont translate
+                angle =np.random.uniform(-4, 4)
+                x  = np.random.uniform(-2, 2)
+                y  =np.random.uniform(-2, 2)
+                z  =np.random.uniform(-1, 1)
+
                 # For each frame
-                for frame in range (0, npy_run.shape[0] ):
-                  npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
+                for frame in range (0, npy_run_mmw.shape[0] ):
+                  npy_run_mmw[frame] = rotate_translate_jitter_pc(npy_run_mmw[frame], angle=0, x=0, y=0, z=0)
+                  npy_run_rotated_mmw[frame] = rotate_translate_jitter_pc(npy_run_rotated_mmw[frame], angle=angle, x=x, y=y, z=z)
                   #npy_run[frame] =  shuffle_pc(npy_run[frame])
-                
+
+                npy_run = np.concatenate(( npy_run_mmw,npy_run_rotated_mmw ), axis = 2 )
+
                 self.data.append(npy_run)
             
-            print("Train  data", np.shape(self.data) )
-         
+            print("Train  data", np.shape(self.data) ) #(nr_sequences, )
 
     def __len__(self):
         return len(self.data)
@@ -135,9 +149,9 @@ class MMW(object):
         direction = 1
         speed = 1
         if direction == 1:
-        	start_limit = total_lenght - ( self.seq_length * speed)
-        	start = np.random.randint(0, start_limit)
-        	end = start + ( self.seq_length * speed)
+            start_limit = total_lenght - ( self.seq_length * speed)
+            start = np.random.randint(0, start_limit)
+            end = start + ( self.seq_length * speed)
         cloud_sequence = []
         
         for i in range(start,end, direction * speed):

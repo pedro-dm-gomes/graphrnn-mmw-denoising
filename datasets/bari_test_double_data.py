@@ -1,7 +1,6 @@
 import os
 import numpy as np
 
-
 def get_dataset_split(split_number):
     
     if (split_number == -1): # For Fast Debug
@@ -31,7 +30,7 @@ class MMW(object):
         seq_length=100,
         num_points=200,
         train=False,
-        split_number =0,               
+        split_number =0,
     ):
 
         self.seq_length = seq_length
@@ -39,36 +38,57 @@ class MMW(object):
         self.data = []
 
         log_nr = 0
-        # print(" MMW DATASET ")
-        root = root + '/' +str(num_points)+ '/all_runs'
+        print("root", root)
+        
+        root_original_mmW = root + '/Not_Rotated_dataset'
+        root_rotated_mmW = root + '/Rotated_dataset'
+        
+        
+        root_original_mmW = root_original_mmW + '/' +str(num_points) + '/all_runs'
+        root_rotated_mmW = root_rotated_mmW + '/' +str(num_points) + '/all_runs'
+        print("root_original_mmW", root_original_mmW)
+        print("root_rotated_mmW", root_rotated_mmW)
+        
         if not(train):
 
-
-            npy_files = os.listdir(root)
+            
+            #all_npy_files = os.listdir(root_original_mmW)
             test_npy_files = get_dataset_split(split_number)
             npy_files = test_npy_files
     
+            
             # For each run calculate the limit
+            
             for run in npy_files:
-                file_path = os.path.join(root, run)
-                npy_run = np.load(file_path)
-                #print("[LOAD EVAL] 30% File_path", file_path)
-                npy_run = npy_run[0]
+                file_path_original_mmw = os.path.join(root_original_mmW, run)
+                file_path_rotated_mmw = os.path.join(root_rotated_mmW, run)
                 
-                # Cut 70% of frames
-                #d_len = int(npy_run.shape[0]*0.7)
-                #npy_run = npy_run[d_len:]
+                print("file_path_original_mmw", file_path_original_mmw)
+                print("file_path_rotated_mmw", file_path_rotated_mmw)
                 
-                run_size = npy_run.shape[0]
+                npy_run_mmw = np.load(file_path_original_mmw)
+                npy_run_mmw = npy_run_mmw[0]
+
+                npy_run_rotated_mmw = np.load(file_path_rotated_mmw)
+                npy_run_rotated_mmw = npy_run_rotated_mmw[0]
+            	
+
+                run_size = npy_run_mmw.shape[0]
                 start = 0
                 end = start + seq_length
                 while end < run_size:
-                    npy_data = npy_run[start:end, :, :]
+                    #print("start", start)
+                    #print("end", end)
+                    #print("npy_run_mmw.shape")
+                    npy_run_mmw_data = npy_run_mmw[start:end, :, :]
+                    npy_run_rotated_mmw_data = npy_run_rotated_mmw[start:end, :, :]
+                    npy_data = np.concatenate( (npy_run_mmw_data,npy_run_rotated_mmw_data ), axis = 2)
+                    #print("npy_data", npy_data.shape)
                     self.data.append(npy_data)
                     start = start + seq_length
                     end = start + seq_length
             
-            print("Test  data", np.shape(self.data) )
+            print("Test data", np.shape(self.data) )
         
 
     def __len__(self):
