@@ -30,8 +30,9 @@ def shuffle_pc(pc):
 
 def get_dataset_split(split_number):
     
+    print("split number: ",split_number )
     if (split_number == -1): # For Fast Debug
-            test_npy_files =  [3,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65]
+            test_npy_files =  [3,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65, ]
 
     if (split_number == 0): # Standart Split
             test_npy_files =  [3,7,49,55,57,68,70]
@@ -45,11 +46,20 @@ def get_dataset_split(split_number):
             
     if (split_number == 7): # Walter current split - split 0 + 64
             test_npy_files =  [3,7,49,55,57,64,68,70]
-            
+
+
+    if (split_number == 11): # Split 11
+        test_npy_files =  [ 9,69,73,3,55, 53,67,74,80,88,96,61,6,64,92,70,85,50,56,57] # test + val
+  
+        
+    if (split_number == 12): # Split 12
+        test_npy_files =  [68,77,84,95,87, 98,93,86,75,65,62,4,49,7,51,72] # test + val
+                        
+
     test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
 
-    
     return test_npy_files
+
 
 class MMW(object):
     def __init__(
@@ -76,8 +86,8 @@ class MMW(object):
             
             
         log_nr = 0
-        root_original_mmW = root_original_mmW + '/' +str(num_points) + '/all_runs'
-        root_rotated_mmW = root_rotated_mmW + '/' +str(num_points) + '/all_runs'
+        root_original_mmW = root_original_mmW + '/' +str(num_points) + '/all_runs_final'
+        root_rotated_mmW = root_rotated_mmW + '/' +str(num_points) + '/all_runs_final'
         
         print("root_original_mmW", root_original_mmW)
         if train:
@@ -88,10 +98,11 @@ class MMW(object):
             # Select the split of dataset
             test_npy_files = get_dataset_split(split_number)
             
-            print("\nTest files", test_npy_files)
+            #print("\nTest files", test_npy_files)
             
             # Remove test data from training set
             npy_files = [string for string in all_npy_files if string not in test_npy_files]
+            if(split_number== -1): npy_files = ['labels_run_75.npy']
             
             print("\nTrain files", npy_files)
             
@@ -116,20 +127,24 @@ class MMW(object):
                     npy_run_rotated_mmw = np.flip(npy_run_rotated_mmw, axis = 0)
                 
                 # Rotate Translate and Jitter the point cloud
-                angle =np.random.uniform(-4, 4)
-                x  = np.random.uniform(-2, 2)
-                y  =np.random.uniform(-2, 2)
-                z  =np.random.uniform(-1, 1)
+                #angle =np.random.uniform(-4, 4)
+                #x  = np.random.uniform(-2, 2)
+                #y  =np.random.uniform(-2, 2)
+                #z  =np.random.uniform(-1, 1)
 
-                # For each frame
-                for frame in range (0, npy_run_mmw.shape[0] ):
-                  npy_run_mmw[frame] = rotate_translate_jitter_pc(npy_run_mmw[frame], angle=0, x=0, y=0, z=0)
-                  npy_run_rotated_mmw[frame] = rotate_translate_jitter_pc(npy_run_rotated_mmw[frame], angle=angle, x=x, y=y, z=z)
-                  #npy_run[frame] =  shuffle_pc(npy_run[frame])
-
-                npy_run = np.concatenate(( npy_run_mmw,npy_run_rotated_mmw ), axis = 2 )
-
-                self.data.append(npy_run)
+                run_size = npy_run_mmw.shape[0]
+                start = 0
+                end = start + seq_length
+                while end < run_size:
+                    
+                    npy_run_mmw_data = npy_run_mmw[start:end, :, :]
+                    npy_run_rotated_mmw_data = npy_run_rotated_mmw[start:end, :, :]
+                    npy_data = np.concatenate( (npy_run_mmw_data,npy_run_rotated_mmw_data ), axis = 2)
+                    
+                    self.data.append(npy_data)
+                    start = start + np.random.randint(1,5) 
+                    end = start + seq_length
+                    
             
             print("Train  data", np.shape(self.data) ) #(nr_sequences, )
 
@@ -150,7 +165,7 @@ class MMW(object):
         speed = 1
         if direction == 1:
             start_limit = total_lenght - ( self.seq_length * speed)
-            start = np.random.randint(0, start_limit)
+            start = 0# np.random.randint(0, start_limit)
             end = start + ( self.seq_length * speed)
         cloud_sequence = []
         

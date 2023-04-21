@@ -5,21 +5,29 @@ import numpy as np
 def get_dataset_split(split_number):
     
     if (split_number == -1): # For Fast Debug
-            test_npy_files =  [3,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65]
+        test_npy_files =  [3 ]# ,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65]
 
     if (split_number == 0): # Standart Split
-            test_npy_files =  [3,7,49,55,57,68,70]
+        test_npy_files =  [3,7,49,55,57,68,70]
 
     if (split_number == 1):
-            test_npy_files = [4,8,53,56,62,67,69]
+        test_npy_files = [4,8,53,56,62,67,69]
 
     if (split_number == 2):
-            test_npy_files = [6,9,51,58,59,63,66,65]
+        test_npy_files = [6,9,51,58,59,63,66,65]
 
             
     if (split_number == 7): # Walter current split - split 0 + 64
-            test_npy_files =  [3,7,49,55,57,64,68,70]
+        test_npy_files =  [3,7,49,55,57,64,68,70]
             
+
+    if (split_number == 11): # Split 11
+        test_npy_files =  [ 53,67,74,80,88,96,61,6,64,92,70,85,50,56,57] 
+  
+        
+    if (split_number == 12): # Split 12
+        test_npy_files =  [ 98,93,86,75,65,62,4,49,7,51,72] 
+                        
     test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
 
     return test_npy_files
@@ -40,7 +48,7 @@ class MMW(object):
 
         log_nr = 0
         # print(" MMW DATASET ")
-        root = root + '/' +str(num_points)+ '/all_runs'
+        root = root + '/' +str(num_points)+ '/all_runs_final'
         if not(train):
 
 
@@ -65,7 +73,7 @@ class MMW(object):
                 while end < run_size:
                     npy_data = npy_run[start:end, :, :]
                     self.data.append(npy_data)
-                    start = start + seq_length
+                    start = start + 1 # seq_length
                     end = start + seq_length
             
             print("Test  data", np.shape(self.data) )
@@ -83,21 +91,14 @@ class MMW(object):
         log_data = self.data[rand]
         total_lenght = len(log_data)
 
-        # print("nr frames:", total_lenght)
         start_limit = total_lenght - self.seq_length
         start = 0
-
-        #print("[Seq] %d (of %d)  [%d - %d] (of %d)"% (rand, nr_seq, start, start + self.seq_length, total_lenght) )
-
         cloud_sequence = []
-        cloud_sequence_color = []
 
         for i in range(start, start + self.seq_length):
             pc = log_data[i]
 
             npoints = pc.shape[0]
-            # sample_idx = np.random.choice(npoints, self.num_points, replace=False)
-
             cloud_sequence.append(pc)
 
         points = np.stack(cloud_sequence, axis=0)

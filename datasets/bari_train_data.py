@@ -13,9 +13,9 @@ def rotate_translate_jitter_pc(pc, angle, x,y,z):
 	    px, py, pz = pc[p,0:3]
 	    
 	    # Do via Matrix mutiplication istead
-	    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy) + x + (np.random.rand() * (0.05 * 2) - 0.05 )
-	    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy) + y + (np.random.rand() * (0.05 * 2) - 0.05 )
-	    qz = pz + z  + (np.random.rand() * (0.05 * 2) - 0.05 )
+	    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy) + x + (np.random.rand() * (0.01 * 2) - 0.01 )
+	    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy) + y + (np.random.rand() * (0.01 * 2) - 0.01 )
+	    qz = pz + z  + (np.random.rand() * (0.01 * 2) - 0.01 )
 	    pc[p,0:3] = qx, qy, pz
 	   
     return pc
@@ -30,6 +30,7 @@ def shuffle_pc(pc):
 
 def get_dataset_split(split_number):
     
+    print("split number: ",split_number )
     if (split_number == -1): # For Fast Debug
             test_npy_files =  [3,7,49,55,57,68,70,4,8,53,56,62,67,69,6,9,51,58,59,63,66,65]
 
@@ -45,7 +46,17 @@ def get_dataset_split(split_number):
             
     if (split_number == 7): # Walter current split - split 0 + 64
             test_npy_files =  [3,7,49,55,57,64,68,70]
-            
+
+
+    if (split_number == 11): # Split 11
+        test_npy_files =  [ 9,69,73,3,55, 53,67,74,80,88,96,61,6,64,92,70,85,50,56,57] # test + val
+  
+        
+    if (split_number == 12): # Split 12
+        test_npy_files =  [68,77,84,95,87, 98,93,86,75,65,62,4,49,7,51,72] # test + val
+                        
+                        
+  
     test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
 
     return test_npy_files
@@ -73,7 +84,7 @@ class MMW(object):
         
         
         log_nr = 0
-        root = root + '/' +str(num_points) + '/all_runs'
+        root = root + '/' +str(num_points) + '/all_runs_final'
         if train:
 
             # load all files
@@ -110,11 +121,17 @@ class MMW(object):
                 else:
                     angle = x = y =0  # Dont rotate and dont translate
                 # For each frame
-                for frame in range (0, npy_run.shape[0] ):
-                  npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
-                  #npy_run[frame] =  shuffle_pc(npy_run[frame])
+                run_size =  npy_run.shape[0]
+                start = 0
+                end = start + seq_length
+                while end < run_size:
+                    npy_data = npy_run[start:end, :, :]
+                    #start = start  + 1 # if we load everthing it can blow the memory
+                    start = start  + np.random.randint(1,5) 
+                    end = start + seq_length
+                    if end > run_size : break
                 
-                self.data.append(npy_run)
+                    self.data.append(npy_data)
             
             print("Train  data", np.shape(self.data) )
          
@@ -136,15 +153,17 @@ class MMW(object):
         speed = 1
         if direction == 1:
         	start_limit = total_lenght - ( self.seq_length * speed)
-        	start = np.random.randint(0, start_limit)
+        	start = 0 #np.random.randint(0, start_limit-1)
         	end = start + ( self.seq_length * speed)
         cloud_sequence = []
         
         for i in range(start,end, direction * speed):
        
             pc = log_data[i]
+            jittered_pc = pc #rotate_translate_jitter_pc(pc, angle=0, x=0,y=0,z=0)
+            pc = shuffle_pc(pc)
             npoints = pc.shape[0]
-            cloud_sequence.append(pc)
+            cloud_sequence.append(jittered_pc)
         points = np.stack(cloud_sequence, axis=0)
        
         return points
