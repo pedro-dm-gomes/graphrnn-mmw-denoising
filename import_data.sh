@@ -13,8 +13,8 @@ do
     dest='data/run_'$(($src_id+13))
     # echo ${element:0:3}$temp
     echo 'Elaborating dir: '$dest
-    mkdir $dest
-    # cp $src_dir'run'$src_id'/data_run'$src_id $dest'/data_run'$(($src_id+13))
+    # mkdir $dest
+    cp $src_dir'run'$src_id'/data_run'$src_id $dest'/data_run'$(($src_id+13))
     cp $src_dir'run'$src_id'/dataset_run'$src_id'.json' $dest'/dataset_run'$(($src_id+13))'.json'
     cp $src_dir'run'$src_id'/labelled_mmw_run'$src_id'.json' $dest'/labelled_mmw_run_'$(($src_id+13))'.json'
     cp $src_dir'run'$src_id'/norm_mmw_run'$src_id'.json' $dest'/norm_mmw_run_'$(($src_id+13))'.json'
