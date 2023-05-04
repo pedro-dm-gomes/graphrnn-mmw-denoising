@@ -128,7 +128,7 @@ def gnn_conv2d(inputs,
             padding='SAME',
             use_xavier=True,
             stddev=1e-3,
-            activation_fn=tf.nn.tanh,
+            activation_fn=tf.nn.relu,
             bn=False):
 
     x = layers.Conv1D(
@@ -149,7 +149,7 @@ def gnn_dense(inputs,
             units,
             use_xavier=True,
             stddev=1e-3,
-            activation_fn=tf.nn.tanh,
+            activation_fn=tf.nn.relu,
             bn=False):
             
     x = layers.Dense(units,
@@ -221,8 +221,8 @@ def gnn_tnet(inputs, num_dims, tnet_shapes, bn=False):
     for filt in tnet_shapes[0]:
         x = gnn_conv2d(inputs, filters=filt, kernel_size=[1], bn=bn)
     # x = tf.reduce_max(x, axis=-2, keepdims=True)
-    for filt in tnet_shapes[1]:
-        x = gnn_conv2d(inputs, filters=filt, kernel_size=[1], bn=bn)
+    # for filt in tnet_shapes[1]:
+    #     x = gnn_conv2d(inputs, filters=filt, kernel_size=[1], bn=bn)
     x = layers.GlobalMaxPooling1D(keepdims=True)(x)
     # print(" [tnet] global maxpool 2d shape: ", x.shape)
     x = layers.Lambda(lambda y: tf.reshape(y[0], (y[1], y[2])))( [x, batch_size, x.shape[-1]] )
