@@ -95,9 +95,11 @@ def get_model(point_cloud, is_training, model_params):
 
   # FC layers
   net = tf_util.conv1d(l0_points, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
+  net = tf_util.dropout(net, keep_prob=0.6, is_training=is_training, scope='dp1')
   net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
   net_last = net
-  #net = tf_util.dropout(net, keep_prob=0.6, is_training=is_training, scope='dp1')
+  
+  net = tf_util.dropout(net, keep_prob=0.6, is_training=is_training, scope='dp2')
   net = tf_util.conv1d(net, 2, 1, padding='VALID', activation_fn=None, scope='fc3')
 
   print("net_last", net_last.shape)
