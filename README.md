@@ -1,1 +1,1 @@
-# I am am uptading the readme file on Master branch
+# I am am updating  the readme file on Master branch
