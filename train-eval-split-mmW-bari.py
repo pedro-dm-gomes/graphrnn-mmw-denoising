@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 from datasets.bari_train_data import MMW as Dataset_mmW
-from datasets.bari_test_data import MMW as Dataset_mmW_eval
+from datasets.bari_val_data import MMW as Dataset_mmW_val
 import importlib
 from tqdm import tqdm
 
@@ -55,6 +55,7 @@ parser.add_argument('--decay_step', type=int, default=200000, help='Decay step f
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
 parser.add_argument('--regularizer_scale', type=float, default=0.00, help='Regulaizer value[default: 0.0- or 0.001]') 
+parser.add_argument('--regularizer_alpha', type=float, default=0.1, help='Regulaizer value[default: 0.0- or 0.001]') 
 print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
@@ -68,6 +69,8 @@ os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 BATCH_SIZE = args.batch_size
 NUM_POINTS = args.num_points
 SEQ_LENGTH = args.seq_length
+DATA_SPLIT = args.data_split
+
 
 BASE_LEARNING_RATE = args.learning_rate
 DECAY_STEP = args.decay_step
@@ -79,6 +82,7 @@ BN_DECAY_DECAY_RATE = 0.5
 BN_DECAY_DECAY_STEP = float(DECAY_STEP)
 BN_DECAY_CLIP = 0.99
 
+PATIENCE_LIMIT = 50
 
 """  Setup Directorys """
 MODEL = importlib.import_module(args.model) # import network module
@@ -89,6 +93,7 @@ if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
 LOG_DIR = os.path.join(LOG_DIR, args.model + '_'+ args.version)
 print("LOG_DIR", LOG_DIR)
 if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
+
 os.system('cp %s %s' % (MODEL_FILE, LOG_DIR)) # bkp of model def
 os.system('cp train.py %s' % (LOG_DIR)) # bkp of train procedure
 LOG_FOUT = open(os.path.join(LOG_DIR, 'log_train.txt'), 'a')
@@ -106,8 +111,8 @@ train_dataset = Dataset_mmW(root=args.data_dir,
                         num_points=args.num_points,
                         split_number = args.data_split,
                         train=True)
-#Load Test Dataset
-test_dataset = Dataset_mmW_eval(root=args.data_dir,
+#Load Validation Dataset
+test_dataset = Dataset_mmW_val(root=args.data_dir,
                         seq_length= args.seq_length,
                         num_points=args.num_points,
                         split_number = args.data_split,
@@ -229,16 +234,21 @@ def train():
     # Normal Loss
     if args.balanced_loss == 0:
       loss = MODEL.get_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-      tf.summary.scalar('loss', loss)
+      tf.summary.scalar('BCE_loss', loss)
     if args.balanced_loss == 1:
       # Balanced Loss
       loss = MODEL.get_balanced_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-      tf.summary.scalar('balanced loss', loss)
+      tf.summary.scalar('balanced_loss', loss)
+    if args.balanced_loss == 2:
+      # Balanced Loss
+      loss = MODEL.get_MSE_loss(pred, labels_pl, context_frames = model_params['context_frames'])
+      tf.summary.scalar('MSE_loss', loss)
+      
     
   
     # Manual regulaizer -force all the trainbale weights to be small
     regularizer_scale = args.regularizer_scale
-    regularizer_alpha = 0.1
+    regularizer_alpha = args.regularizer_alpha
     print("regularizer_scale", regularizer_scale)
     params_to_be_regulaized = []
     params = tf.trainable_variables()
@@ -269,10 +279,11 @@ def train():
   
     gradients = tf.gradients(loss, params)
     clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
-    clipped_gradients = gradients
+    clipped_gradients = gradients # no gradient cliping
     train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
 
-    saver = tf.train.Saver(max_to_keep=15, keep_checkpoint_every_n_hours = 5)
+    saver = tf.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours = 5)
+    saver_best = tf.train.Saver()
     
     print(" Trainable paramenters: ")
     params = tf.trainable_variables()
@@ -296,14 +307,12 @@ def train():
     early_stop_count = 0
     best_validation_loss = np.inf
     best_test_acurracy =  0.0
-    patience_limit = 10
-    
+
 
     if args.restore_training == False:
       init = tf.global_variables_initializer()
       sess.run(init)
       ckpt_number = 0 
-      patience_limit = 10
     else:
       # Restore Session
       checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
@@ -311,11 +320,11 @@ def train():
       print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
       saver.restore(sess, checkpoint_path_automatic)
       ckpt_number=ckpt_number[11:]
+      print("ckpt_number:", ckpt_number)
       ckpt_number=int(ckpt_number)
       # change random seed
       np.random.seed(ckpt_number)
       tf.set_random_seed(ckpt_number)
-      patience_limit = 6
 
     ops = {'pointclouds_pl': pointclouds_pl,
   	   'labels_pl': labels_pl,
@@ -335,20 +344,19 @@ def train():
       sys.stdout.flush() 
       # Train one epoch
       if (epoch % 1 == 0):
-        print(" **  Train one epoch ** ")
         train_one_epoch(sess, ops,train_writer, epoch)
         
       #  Test Data Val 
-      if (epoch % 5 == 0 and epoch != 0): 	   
+      if  (epoch > 0 and epoch % 4 == 0 ):        
         # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
       
-        #Evaluate
+        #Evaluate Validation
         print(" **  Evalutate VAL Data ** ")
         val_loss = eval_one_epoch(sess, ops, test_writer, epoch)
         
-        # Manual Early stopping
+        # Early stopping
         if val_loss < best_validation_loss:
           best_validation_loss = val_loss
           print("[Lowest loss]:",best_validation_loss )
@@ -358,7 +366,7 @@ def train():
           print("[Lowest loss]:",best_validation_loss )
           print("[PATIENCE]:", early_stop_count)
           
-        if early_stop_count > patience_limit:   
+        if early_stop_count > PATIENCE_LIMIT:   
           log_string("\n\n---- [EARLY STOP ] -----\n\n")
           exit()
         
@@ -371,14 +379,24 @@ def train():
         np.random.seed(ckpt_number)
         tf.set_random_seed(ckpt_number)  
 
+        # Saved the Best Model
+        if val_loss == best_validation_loss:
+          print("Save this as best model")
+          #save model
+          best_save_path = saver_best.save(sess, os.path.join(LOG_DIR, "best_model.ckpt") )
+          print("Best Model saved in file: %s" % best_save_path)
+          #Save Again in normal path
+          save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+          
+
       # Reload Dataset
-      if (epoch % 6 == 0 and epoch != 0):
+      if (epoch % 10 == 0 and epoch != 0):
         print("[Dataset Reload/Augumented] ")   
         train_dataset = Dataset_mmW(root=args.data_dir,
-                        		   seq_length=args.seq_length,
-                        		   num_points=args.num_points,
-                        		   train=True)
-
+                              seq_length=args.seq_length,
+                              num_points=args.num_points,
+                              split_number = DATA_SPLIT,
+                              train=True)
 
 """ ------------------   """
 
@@ -406,15 +424,16 @@ def train_one_epoch(sess,ops,train_writer, epoch):
       avg_regu_loss = avg_regu_loss + regu_loss
       avg_epoch_loss = avg_epoch_loss + loss
       avg_epoch_accuracy = avg_epoch_accuracy + accuracy
+      
+      train_writer.add_summary(summary, step)
     
     avg_epoch_loss = avg_epoch_loss/nr_batches_in_a_epoch
     avg_epoch_accuracy =avg_epoch_accuracy/nr_batches_in_a_epoch
     avg_regu_loss = avg_regu_loss/nr_batches_in_a_epoch
-    print("[ %s  e:%03d ] Loss: %f\t Regu Loss %f\t  Accuracy: %f\t"%( args.version, epoch, avg_epoch_loss, avg_regu_loss, avg_epoch_accuracy) )
+    print("[ %s  e:%03d ] Loss: %f\t Regu Loss %f\t  Accuracy: %f\t"%( str( args.model + '_' + args.version) ,  epoch, avg_epoch_loss, avg_regu_loss, avg_epoch_accuracy) )
            
     
-    if (epoch % args.save_summary == 0 ):
-      train_writer.add_summary(summary, step)
+
                  
 def eval_one_epoch(sess,ops,test_writer, epoch):
     """ Eval all sequences of test dataset """
@@ -477,7 +496,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     recall = Tp/(Tp+Fn)
     f1_score =2 * ( (precision * recall)/(precision+recall) )
     
-    print('**** EVAL: %03d ****' % (epoch))
+    print('**** EVAL: %03d  %s ****' % (epoch, str( args.model + '_' + args.version) ) )
     print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
     print(' -- ')   
@@ -494,61 +513,6 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
      
     return mean_loss        
                 
-def eval_all_test_data(sess,ops,test_writer, epoch):
-    """ Eval all sequences of test dataset """
-    is_training = False
-    nr_tests = len(test_dataset) 
-    total_accuracy =0
-    total_loss = 0
-    Tp =0 #true positives total
-    Tn =0
-    Fp =0
-    Fn =0
-    # Load Test data
-    for sequence_nr in tqdm (range(0,nr_tests) ):
-      test_seq = test_dataset[sequence_nr]    	
-      test_seq =np.array(test_seq)
-      input_point_clouds = test_seq[:,:,0:3]
-      input_labels = test_seq[:,:,3:4]
-
-      #Batch size problem - work around (this shitty way to do it)
-      # TO DO:  FIX THIS!!!
-      # We repeat the same sequence times the number of batches so the network see all the data
-      input_point_clouds = np.stack((input_point_clouds,) * args.batch_size, axis=0)
-      input_labels = np.stack((input_labels,) * BATCH_SIZE, axis=0)
-      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-
-      pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
-
-      total_accuracy = total_accuracy + accuracy
-      total_loss = total_loss + loss
-      accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
-      Tp = Tp + (true_positives/BATCH_SIZE) #it is the same sequence repeated for batch)
-      Fp = Fp + (false_positives/BATCH_SIZE)
-      Tn = Tn + (true_negatives/BATCH_SIZE)
-      Fn = Fn + (false_negatives/BATCH_SIZE)
-      
-    mean_loss = total_loss/ nr_tests
-    mean_accuracy = total_accuracy/ nr_tests
-    precision = Tp / ( Tp+Fp)
-    recall = Tp/(Tp+Fn)
-    f1_score =2 * ( (precision * recall)/(precision+recall) )
-    
-     
-    print('**** EVAL: %03d ****' % (epoch))
-    print("[FULL TEST DATA] Loss  Accuracy: %f\t  %f\t"%( mean_loss, mean_accuracy) )
-    print("\nPrecision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')
-    
-    # Write to File
-    #log_string('****  %03d ****' % (epoch))
-    log_string(" All test data ")
-    log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
-    if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
-      log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
-    return mean_accuracy
-    
-
                   
 if __name__ == "__main__":
     train()

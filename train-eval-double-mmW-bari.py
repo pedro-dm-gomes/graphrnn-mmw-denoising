@@ -7,7 +7,8 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 from datasets.bari_train_double_data import MMW as Dataset_mmW
-from datasets.bari_test_double_data import MMW as Dataset_mmW_eval
+from datasets.bari_val_double_data import MMW as Dataset_mmW_eval
+
 import importlib
 from tqdm import tqdm
 
@@ -54,7 +55,10 @@ parser.add_argument('--weight_decay', type=int, default=0, help='Do Weight Decay
 parser.add_argument('--decay_step', type=int, default=200000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.7, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
-parser.add_argument('--regularizer_scale', type=float, default=0.00, help='Regulaizer value[default: 0.0- or 0.001]') 
+parser.add_argument('--regularizer_scale', type=float, default=0.00, help='Regulaizer value[default: 0.0- or 0.001]')
+parser.add_argument('--regularizer_alpha', type=float, default=0.1, help='Regulaizer value[default: 0.0- or 0.001]') 
+
+ 
 print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
@@ -80,6 +84,7 @@ BN_DECAY_DECAY_RATE = 0.5
 BN_DECAY_DECAY_STEP = float(DECAY_STEP)
 BN_DECAY_CLIP = 0.99
 
+PATIENCE_LIMIT = 50
 
 """  Setup Directorys """
 MODEL = importlib.import_module(args.model) # import network module
@@ -117,7 +122,7 @@ test_dataset = Dataset_mmW_eval(root=args.data_dir,
                         num_points=args.num_points,
                         split_number = DATA_SPLIT,
                         train= False)
-
+print("Dataset loaded")
 
 
 def get_classification_metrics(predicted_labels, ground_truth_labels, batch_size, seq_length,num_points,context_frames ): 
@@ -246,7 +251,7 @@ def train():
   
     # Manual regulaizer -force all the trainbale weights to be small
     regularizer_scale = args.regularizer_scale
-    regularizer_alpha = 0.1
+    regularizer_alpha = args.regularizer_alpha
     print("regularizer_scale", regularizer_scale)
     params_to_be_regulaized = []
     params = tf.trainable_variables()
@@ -272,7 +277,7 @@ def train():
 
     # Get training operator
     learning_rate = get_learning_rate(batch) 
-    #if (is_training_pl == False):learning_rate = 0.0
+    if (is_training_pl == False): learning_rate = 0.0
     tf.summary.scalar('learning_rate', learning_rate)
   
     gradients = tf.gradients(loss, params)
@@ -280,7 +285,9 @@ def train():
     clipped_gradients = gradients
     train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
 
-    saver = tf.train.Saver(max_to_keep=15, keep_checkpoint_every_n_hours = 5)
+    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours = 5)
+    saver_best = tf.train.Saver()
+    
     
     print(" Trainable paramenters: ")
     params = tf.trainable_variables()
@@ -292,7 +299,9 @@ def train():
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
     config.log_device_placement = False
-    sess = tf.Session( config =config)
+    
+    #sess = tf.Session( config =config)
+    sess =  tf.Session()
     
     # Add summary writers
     merged = tf.summary.merge_all()
@@ -304,14 +313,13 @@ def train():
     early_stop_count = 0
     best_validation_loss = np.inf
     best_test_acurracy =  0.0
-    patience_limit = 10
+
     
 
     if args.restore_training == False:
       init = tf.global_variables_initializer()
       sess.run(init)
       ckpt_number = 0 
-      patience_limit = 10
     else:
       # Restore Session
       checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
@@ -323,7 +331,6 @@ def train():
       # change random seed
       np.random.seed(ckpt_number)
       tf.set_random_seed(ckpt_number)
-      patience_limit = 6
 
     ops = {'pointclouds_pl': pointclouds_pl,
   	      'rotated_pointclouds_pl': rotated_pointclouds_pl, 
@@ -350,8 +357,11 @@ def train():
         train_one_epoch(sess, ops,train_writer, epoch)
         
       #  Test Data Val 
-      if (epoch % 6 == 0 and epoch != 0): 	   
-        # Save Checkpoint
+      if (epoch % 10 == 0):
+        save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+        print("Model saved in file: %s" % save_path)
+                
+      if (epoch % 2 == 0 and epoch > 2):       # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
       
@@ -359,10 +369,6 @@ def train():
         print(" **  Evalutate VAL Data ** ")
         val_loss = eval_one_epoch(sess, ops, test_writer, epoch)
 
-        if val_loss < best_validation_loss:
-          save_path = saver.save(sess, os.path.join(BEST_MODEL_DIR, "model.ckpt"), global_step = epoch)
-          
-                  
         # Manual Early stopping
         if val_loss < best_validation_loss:
           best_validation_loss = val_loss
@@ -373,7 +379,7 @@ def train():
           print("[Lowest loss]:",best_validation_loss )
           print("[PATIENCE]:", early_stop_count)
           
-        if early_stop_count > patience_limit:
+        if early_stop_count > PATIENCE_LIMIT:
           log_string("\n\n---- [EARLY STOP ] -----\n\n")
           exit()
         
@@ -385,15 +391,23 @@ def train():
         ckpt_number= int( ckpt_number[11:] )
         np.random.seed(ckpt_number)
         tf.set_random_seed(ckpt_number)  
+        
+        if (best_validation_loss == val_loss):
+          # Save in best model folder
+          save_path = saver_best.save(sess, os.path.join(LOG_DIR, "best_model.ckpt"))
+          #save again to not override
+          save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch) 
 
 
+      
       # Reload Dataset
       if (epoch % 6 == 0 and epoch != 0):
         print("[Dataset Reload/Augumented] ")   
         train_dataset = Dataset_mmW(root=args.data_dir,
-                        		   seq_length=args.seq_length,
-                        		   num_points=args.num_points,
-                        		   train=True)
+                                seq_length=args.seq_length,
+                                num_points=args.num_points,
+                                split_number = DATA_SPLIT,
+                                train=True)
 
 
 """ ------------------   """
@@ -469,6 +483,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         rotated_point_clouds = test_seq[:,:,4:7]
         #print("rotated_point_clouds.shape", rotated_point_clouds.shape)
         labels = test_seq[:,:,3:4]
+        
         input_rotated_point_clouds.append(rotated_point_clouds)
         input_point_clouds.append(point_clouds)
         input_labels.append(labels)
