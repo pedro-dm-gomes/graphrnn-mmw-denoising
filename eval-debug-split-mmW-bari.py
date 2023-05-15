@@ -8,10 +8,14 @@ from PIL import Image
 import tensorflow as tf
 from datasets.bari_train_data import MMW as Dataset_mmW
 from datasets.bari_test_data import MMW as Dataset_mmW_eval
+#from datasets.bari_val_data import MMW as Dataset_mmW_eval
+
 import importlib
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+import seaborn as sns
+from sklearn.metrics import roc_auc_score
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', default='0', help='Select GPU to run code [default: 0]')
 parser.add_argument('--data-dir', default='/home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset', help='Dataset directory')
 parser.add_argument('--batch-size', type=int, default=409, help='Batch Size during training [default: 16]')
-parser.add_argument('--data-split', type=int, default=0, help='Select the train/test/ data split  [default: 0,1,2]')
+parser.add_argument('--data-split', type=int, default=11, help='Select the train/test/ data split  [default: 0,1,2]')
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
 parser.add_argument('--learning-rate', type=float, default=0.0, help='Learning rate [default: 1e-4]')
 parser.add_argument('--max-gradient-norm', type=float, default=5.0, help='Clip gradients[default: 5.0 or 1e10 no clip].')
@@ -84,6 +88,13 @@ BN_DECAY_DECAY_RATE = 0.5
 BN_DECAY_DECAY_STEP = float(DECAY_STEP)
 BN_DECAY_CLIP = 0.99
 
+# Analyze Flags
+id_seq_to_visualize = [40, 53, 200, 214, 235,500,600,700]
+TNET_FLAG = False
+DO_SAMPLED_ACC_FLAG = True
+if (SEQ_LENGTH == 1):DO_SAMPLED_ACC_FLAG = False
+NUM_SAMPLED_POINTS = 10 * 12
+
 
 """  Setup Directorys """
 MODEL = importlib.import_module(args.model) # import network module
@@ -94,6 +105,8 @@ if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
 LOG_DIR = os.path.join(LOG_DIR, args.model + '_'+ args.version)
 print("LOG_DIR", LOG_DIR)
 if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
+BEST_MODEL_DIR = os.path.join(LOG_DIR, 'best_model')
+if not os.path.exists(BEST_MODEL_DIR): os.mkdir(BEST_MODEL_DIR)
 os.system('cp %s %s' % (MODEL_FILE, LOG_DIR)) # bkp of model def
 os.system('cp evaluate.py %s' % (LOG_DIR)) # bkp of train procedure
 LOG_FOUT = open(os.path.join(LOG_DIR, 'log_debug.txt'), 'a')
@@ -162,6 +175,34 @@ def print_weights(sess, params, layer_nr):
     print("W", W)
     print("Layer[",layer_nr, "]", W, "\n")    
 
+def farthest_point_sampling(point_cloud, num_samples):
+  
+  sampled_point_cloud = np.zeros((num_samples, 3))
+   
+  # Select the first point randomly
+  first_point_index = np.random.randint(point_cloud.shape[0])
+  sampled_point_cloud[0] = point_cloud[first_point_index]
+  
+  indices = [first_point_index]
+
+  # Compute distance to all other points
+  distances = np.linalg.norm(point_cloud - sampled_point_cloud[0], axis=1)
+
+  # Choose the remaining points using farthest point sampling
+  for i in range(1, num_samples):
+      farthest_point_index = np.argmax(distances)
+      indices.append(farthest_point_index)    
+      sampled_point_cloud[i] = point_cloud[farthest_point_index]
+      new_distances = np.linalg.norm(point_cloud - sampled_point_cloud[i], axis=1)
+      distances = np.minimum(distances, new_distances)
+
+  return indices,  
+      
+      
+def random_sampling(point_cloud, num_samples):
+    indices = np.random.choice(point_cloud.shape[0], num_samples, replace=False)
+    return indices
+  
 def get_batch(dataset, batch_size):
     """ load from the dataset at random """
     batch_data = []
@@ -283,7 +324,7 @@ def evaluate():
     
     # Add summary writers
     merged = tf.summary.merge_all()
-    train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train_debug'), sess.graph)
+    #train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train_debug'), sess.graph)
     test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test_debug'))
 
     # Restore Session
@@ -293,14 +334,23 @@ def evaluate():
       restore_checkpoint_path = checkpoint_path_automatic
       ckpt_number=ckpt_number[11:]
       ckpt_number=int(ckpt_number)
-      print ("\n** Restore from checkpoint ***: ", checkpoint_path_automatic)
-    if (args.manual_restore == 1):
+      print ("\n** Restore from checkpoint ***: ", restore_checkpoint_path)
+      
+    
+    if (args.manual_restore == 1): # Select automatically
       checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
       ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
       ckpt_number=ckpt_number[11:]
       restore_checkpoint_path =checkpoint_path_automatic.replace(ckpt_number, str(args.restore_ckpt) )
       ckpt_number= args.restore_ckpt
       print ("\n** Restore from checkpoint ***: ", restore_checkpoint_path)
+    
+    if (args.manual_restore == 2): # Best Validation model
+      restore_checkpoint_path = os.path.join(LOG_DIR, "best_model.ckpt")
+      print ("\n** Restore from checkpoint ***: ", restore_checkpoint_path)
+      ckpt_number= 1
+      #exit()
+      
 
     saver.restore(sess, restore_checkpoint_path)
     # change random seed
@@ -323,7 +373,7 @@ def evaluate():
       
       sys.stdout.flush() 
       #Evaluate
-      print(" **  Evalutate VAL Data ** ")
+      print(" **  Evalutate Test Data ** ")
       mean_loss, mean_accuracy   = eval_one_epoch(sess, ops, test_writer, epoch)   
         	
         
@@ -335,6 +385,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     
     nr_tests = len(test_dataset) 
     num_batches = nr_tests // BATCH_SIZE
+    point_loss_list = []
 
       
     x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
@@ -347,7 +398,10 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     Tn =0
     Fp =0
     Fn =0
-    
+    total_auc_roc = 0
+    total_sampled_accuracy = 0
+    skip_count = 0
+        
     for batch_idx in tqdm ( range(num_batches) ):
       start_idx = batch_idx * BATCH_SIZE
       end_idx = (batch_idx+1) * BATCH_SIZE
@@ -365,7 +419,20 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       
       input_point_clouds = np.array(input_point_clouds)
       input_labels = np.array(input_labels)
-#
+      
+      # Input a GRID
+      GRID_CASE_FLAG = False
+      if (idx == 200 and GRID_CASE_FLAG == True):
+        # Define grid size
+        x = np.random.uniform(0, 2, 200)
+        y = np.random.uniform(-2, 2, 200)
+        z = np.random.uniform(0, 0.4, 200)
+        #print("input_point_clouds.shape", input_point_clouds.shape) #(1,1,200,#)
+        input_point_clouds[:,:,:,0]= x
+        input_point_clouds[:,:,:,1]= y
+        input_point_clouds[:,:,:,2]= z
+        
+      
       # Send to model to be evaluated
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
       pred, summary, step, loss, accuracy, params, end_points =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['loss'], ops['acc'], ops['params'] , ops['end_points']], feed_dict=feed_dict) 
@@ -378,35 +445,80 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       Tn = Tn + (true_negatives)
       Fn = Fn + (false_negatives)
 
+      # Calculate AUC-ROC
+      aux_pred = pred[0]
+      y_pred_proba = np.reshape(aux_pred, (aux_pred.shape[0]*aux_pred.shape[1], 2))
+      y_pred_proba = y_pred_proba[:,1]# probaibility of classe 1
+      y_true = input_labels
+      y_true = y_true[0]
+      y_true = np.reshape(y_true, (y_true.shape[0]*y_true.shape[1], 1))
+      if len(np.unique(y_true)) == 1:
+        #print("Only one class present in y_true [skip AUC-ROC]")
+        skip_count =  skip_count +1 
+      else: 
+        auc_roc = roc_auc_score(y_true, y_pred_proba)
+        total_auc_roc = total_auc_roc +auc_roc
+        
+    
+      
+      
       """ Visualize weights in terminal """
       #print_weights(sess, params, 82)
       
-      """ Data Analyzes """
+      """ Data Analyze """
       DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/'+ args.model + '_' + args.version +'/'
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
+      FPS_IDX_PATH = '/scratch/uceepdg/Fps_idxs_12_frame/'
+      if not os.path.exists(FPS_IDX_PATH): os.mkdir(FPS_IDX_PATH)
+
+
+      # Sampled evaluation of the point cloud
+      if DO_SAMPLED_ACC_FLAG == True :
+        # This is very heavy since the farthest_point_sampling is not optimzed
+        pc_to_sample = input_point_clouds[0]
+        pc_to_sample= np.reshape(pc_to_sample, (SEQ_LENGTH*NUM_POINTS,3  ) )
+        # Save indices to file
+        #indices = farthest_point_sampling(pc_to_sample,NUM_SAMPLED_POINTS  )
+        #print("idx", idx)
+        #indices = np.array(indices)
+        #indices = indices[0]
+        #np.save( FPS_IDX_PATH +'indices_' + str(idx) +'.npy', indices, )
+        
+        #load from file
+        loaded_indices = np.load(FPS_IDX_PATH +'indices_' + str(idx) +'.npy')
+
+        aux_pred = np.reshape(pred, (SEQ_LENGTH*NUM_POINTS,2  ) )
+        sampled_pred = aux_pred[loaded_indices, :]
+        aux_input_labels = input_labels[0]
+        aux_input_labels = np.reshape(aux_input_labels, (SEQ_LENGTH*NUM_POINTS,1 ) )
+        sampled_true_labels = aux_input_labels[loaded_indices, :]
+        sampled_true_labels = np.reshape(sampled_true_labels, (1,SEQ_LENGTH,int(NUM_SAMPLED_POINTS/SEQ_LENGTH),1 ) )
+        sampled_pred = np.reshape(sampled_pred, (1,SEQ_LENGTH,int(NUM_SAMPLED_POINTS/SEQ_LENGTH),2 ) )
+
+        sampled_accuracy, sampled_true_positives, sampled_false_positives, sampled_true_negatives, sampled_false_negatives = get_classification_metrics(sampled_pred, sampled_true_labels, BATCH_SIZE, SEQ_LENGTH,NUM_SAMPLED_POINTS/SEQ_LENGTH,context_frames=0) 
+        total_sampled_accuracy = total_sampled_accuracy+ sampled_accuracy
       
-      id_seq_to_visualize = [40,200,500,600,700]
-      TNET_FLAG = False
+      if( idx%1000 ==0 and idx >0):
+        print("accuracy:", total_accuracy/(idx+1))
+        print("sampled_accuracy:", total_sampled_accuracy/(idx+1) )
+  
+
+
+      """ Plot of results """
       
       if( idx in id_seq_to_visualize):
-      #if( idx % 50 == 0):
-        
-        print("\Plot results for sequence: ", idx)
+                
         #Special case# there is a T-NET
         if (TNET_FLAG == True):
-          print(" --- Using T-net")
           l0_xyz_transformed = end_points['l0_xyz_transformed']
-          print("l0_xyz_transformed", l0_xyz_transformed.shape)
           l0_xyz_transformed = l0_xyz_transformed[0]
           transform = end_points['transform']
-          print("transform", transform)
         
         
+        pred = pred[0]
         last_d_feat = end_points['last_d_feat']
         input_point_clouds = input_point_clouds[0] # batch size is 1
         input_labels = input_labels[0]
-        pred = pred[0]
-        print("last_d_feat.shape", last_d_feat.shape)
         last_d_feat = last_d_feat[0]
         pred_soft_max = np.exp(pred) / np.sum(np.exp(pred), axis=-1, keepdims=True)
 
@@ -422,6 +534,23 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         cor_labels = np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
         cor_pred =  np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
         one_hot_cor_pred =np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+        cor_BCE_loss =  np.zeros(  (SEQ_LENGTH, NUM_POINTS, 3) )
+        
+
+        #Calcultate BCE LOSS  
+        aux_pred = np.reshape(pred, (1,SEQ_LENGTH*NUM_POINTS,2 ) )
+        aux_labels =np.reshape(input_labels, (1,SEQ_LENGTH*NUM_POINTS ) )
+        aux_labels = aux_labels.astype(np.int)
+
+        labels_one_hot = np.eye(2)[aux_labels.reshape(-1)].reshape(aux_labels.shape[0], aux_labels.shape[1], 2)
+        epsilon = 1e-7 
+        softmax = np.exp(aux_pred) / np.sum(np.exp(aux_pred), axis=-1, keepdims=True)
+        bce_loss = -labels_one_hot * np.log(softmax + epsilon)
+        point_loss = np.mean(bce_loss, axis=-1)
+        point_loss_norm = (point_loss - np.min(point_loss)) / (np.max(point_loss) - np.min(point_loss))
+        point_loss_norm =np.reshape(input_labels, (SEQ_LENGTH, NUM_POINTS, 1 ) )
+        
+        
         for f in range (0, SEQ_LENGTH):
           for p in range(0,NUM_POINTS):
             if(input_labels[f,p,0]) == 0: # NOISE DATA
@@ -433,21 +562,33 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
             else:
               one_hot_cor_pred[f,p,:] = [1.0, 0.0, 0.0] # RED
             cor_pred[f, p, :] = [ pred_soft_max[f,p,0], pred_soft_max[f,p,1], 0.0] # Color is probability
-                   
+            cor_BCE_loss[f, p, :] =  [ point_loss_norm[f,p,:], 0.0 , 0.0]
+
+    
+        # Plot Histrogram
+        #point_loss_list.append(point_loss)
+        #if (idx %1000 == 0 and idx > 0):
+          #point_loss_list_to_plot = np.array(point_loss_list)
+          #fig = plt.figure(figsize=(10*1, 6))
+          #plt.hist(point_loss_list_to_plot.flatten(), bins=20)
+          #fig.suptitle("LOSS BCE HIST " + str(idx), fontsize=16)
+          #fig.savefig(DATA_DIR+"/Histogram_"+ str(idx) + ".png")
+          #plt.close()    
         
         """ Save Images """
         nr_subplots = SEQ_LENGTH
-        nr_rows = 4
-        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
+        nr_rows = 5
+        plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' , 'BCE Loss']
         S_input_point_clouds =  np.reshape(input_point_clouds, (input_point_clouds.shape[0]* input_point_clouds.shape[1], input_point_clouds.shape[2]) )
         S_cor_labels = np.reshape(cor_labels, (cor_labels.shape[0]* cor_labels.shape[1], cor_labels.shape[2]) )
         S_feat_cor = np.reshape(feat_cor, S_cor_labels.shape )
         S_cor_pred = np.reshape(cor_pred, S_cor_labels.shape )
         S_one_hot_cor_pred = np.reshape(one_hot_cor_pred, S_cor_labels.shape )
+        S_bce_cor = np.reshape(cor_BCE_loss, S_cor_labels.shape )
         row = 0
         # Plot Stacked Figure
         fig = plt.figure(figsize=(10*nr_rows, 6))
-        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred ]:
+        for cor in [S_cor_labels, S_feat_cor, S_cor_pred, S_one_hot_cor_pred, S_bce_cor ]:
           ax = fig.add_subplot(1,nr_rows,row+1)
           ax.scatter(S_input_point_clouds[:,0], S_input_point_clouds[:,1], c= cor)
           title = plot_titles[row]
@@ -460,7 +601,7 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         fig.suptitle("Input point cloud " + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/Stacked_"+ str(idx) + ".png")
         plt.close()
-
+        
         nr_subplots = SEQ_LENGTH
         nr_rows = 4
         plot_titles = ['cor_labels', 'feat_cor', 'cor_pred', '1-Hot Color' ]
@@ -599,27 +740,44 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
         
         fig.suptitle("Sequence" + str(idx), fontsize=16)
         fig.savefig(DATA_DIR+"/seq_"+ str(idx) + ".png")
-        print("\n")             
+        
+    
+      
 
             
     mean_loss = total_loss/ num_batches
     mean_accuracy = total_accuracy/ num_batches
+    mean_sampled_accuracy = total_sampled_accuracy/ num_batches
     precision = Tp / ( Tp+Fp)
     recall = Tp/(Tp+Fn)
     f1_score =2 * ( (precision * recall)/(precision+recall) )
+    mean_auc_roc = total_auc_roc/(num_batches-skip_count)
     
     print('**** EVAL: %03d ****' % (epoch))
-    print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
+    print("[Test] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
     print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')    
+    print("AUC-ROC: ", mean_auc_roc)
+    print("Sampled Accuracy: ", mean_sampled_accuracy)
+    print(' -- ')  
+
+    # Define the confusion matrix data
+    confusion_data = [[Tp, Fp], [Fn, Tn]]
+    # Plot the confusion matrix
+    labels = ['True Positive', 'False Positive', 'False Negative', 'True Negative']
+    fig = plt.figure(figsize=(5, 5))
+    sns.heatmap(confusion_data, annot=True, cmap="Blues", xticklabels=labels, yticklabels=labels, fmt='g')
+    fig.savefig(DATA_DIR+"/confusion_matrix" + ".png")
+
     
     
     # Write to File
     #log_string('****  %03d ****' % (epoch))
     log_string('%03d  eval mean loss, accuracy: %f \t  %f \t' % (epoch, mean_loss , mean_accuracy))
+    log_string('%03d sampled accuracy: %f \t AUC-ROC  %f \t' % (epoch, mean_sampled_accuracy, mean_auc_roc ))
     if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
-    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
-
+      log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
+    
+    
     return mean_loss, mean_accuracy        
       
                 

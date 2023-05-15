@@ -224,3 +224,110 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
   	
   sequence_loss = sequence_loss/(seq_length)
   return sequence_loss  
+
+def get_MSE_loss(predicted_labels, ground_truth_labels, context_frames = 0 ): 
+  """
+  Gets predicted labels and gdt labels (numpy) and returns accuracy
+  In : predicted_labels : Tensor (batch , seq_length, num_points, 2)
+       ground_truth_labels : Tensor(batch , seq_length, num_points, 1) 
+  Out: accuracy (1)
+  """
+  print("MSE loss")
+
+  batch_size = ground_truth_labels.get_shape()[0].value
+  seq_length = ground_truth_labels.get_shape()[1].value
+  num_points = ground_truth_labels.get_shape()[2].value
+  
+  # Convert labels to a list - This can be improved but it works
+  ground_truth_labels = tf.split(value = ground_truth_labels , num_or_size_splits=seq_length, axis=1)
+  ground_truth_labels = [tf.squeeze(input=label, axis=[1]) for label in ground_truth_labels] 
+  
+  predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
+  predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
+  
+  sequence_loss = 0
+  #Calculate loss frame by frame
+  for frame in range(context_frames,seq_length ):
+    logits = predicted_labels[frame]
+    labels = ground_truth_labels[frame]
+    
+    
+    logits = tf.nn.softmax(logits)
+    #logits = tf.nn.sigmoid(logits)
+
+    
+    logits = logits[:,:,0]
+    
+    logits = tf.reshape( logits,  [batch_size * num_points , 1] )
+    labels = tf.reshape( labels,  [batch_size * num_points , 1] )
+    
+    print("logits", logits) # Tensor("Reshape_5:0", shape=(12800, 2), dtype=float32)
+  
+    binary_output = logits
+    #binary_output = tf.cast(tf.greater(logits, 0.5), dtype=tf.float32)
+    
+    
+    labels = tf.cast(labels, tf.float32)
+    
+    print("binary_output", binary_output)
+    print("labels", labels)
+    
+    mse_loss = tf.losses.mean_squared_error(labels, binary_output)
+
+
+    
+    sequence_loss = sequence_loss +   mse_loss
+    
+    print("sequence_loss", mse_loss)
+    
+  
+  sequence_loss = sequence_loss/(seq_length)
+  
+  return sequence_loss  
+
+
+def get_acurracy_loss_2(predicted_labels, ground_truth_labels, context_frames = 0 ): 
+  """
+  Gets predicted labels and gdt labels (numpy) and returns accuracy
+  In : predicted_labels : Tensor (batch , seq_length, num_points, 2)
+       ground_truth_labels : Tensor(batch , seq_length, num_points, 1) 
+  Out: accuracy (1)
+  """
+  print("MSE loss")
+
+  batch_size = ground_truth_labels.get_shape()[0].value
+  seq_length = ground_truth_labels.get_shape()[1].value
+  num_points = ground_truth_labels.get_shape()[2].value
+  
+  # Convert labels to a list - This can be improved but it works
+  ground_truth_labels = tf.split(value = ground_truth_labels , num_or_size_splits=seq_length, axis=1)
+  ground_truth_labels = [tf.squeeze(input=label, axis=[1]) for label in ground_truth_labels] 
+  
+  predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
+  predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
+  
+  sequence_loss = 0
+  #Calculate loss frame by frame
+  for frame in range(context_frames,seq_length ):
+    logits = predicted_labels[frame]
+    labels = ground_truth_labels[frame]
+    
+    logits = tf.nn.softmax(logits)
+    
+    logits = tf.reshape(logits, [-1, 2]) 
+    labels = tf.reshape(labels, [-1, 1])
+    print("logits", logits) # Tensor("Reshape_5:0", shape=(12800, 2), dtype=float32)
+    print("labels", labels) # labels Tensor("Reshape_6:0", shape=(12800, 1),
+    labels = tf.cast(labels, tf.float32)
+    
+    print("labels", labels) # labels Tensor("Reshape_6:0", shape=(12800, 1),
+    
+    mse_loss = tf.reduce_mean(tf.square(logits - labels))
+    print("mse_loss", mse_loss)
+    
+    sequence_loss = sequence_loss +   mse_loss
+  
+  sequence_loss = sequence_loss/(seq_length)
+  
+  return sequence_loss  
+

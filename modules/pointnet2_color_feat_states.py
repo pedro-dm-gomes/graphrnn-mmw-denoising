@@ -76,6 +76,10 @@ def pointnet_fp_module_original_interpolated(xyz1,
         return new_points1, interpolated_points
         
 
+
+
+
+
 def sample_and_group_original(npoint, radius, nsample, xyz, points, knn=False, use_xyz=True):
     '''
     Input:
@@ -112,6 +116,107 @@ def sample_and_group_original(npoint, radius, nsample, xyz, points, knn=False, u
         new_points = grouped_xyz
 
     return new_xyz, new_points, idx, grouped_xyz
+
+
+def group_points_from_idx(FPS_index, nsample,  xyz, features,states, use_xyz = False):
+    new_xyz = gather_point(xyz, FPS_index)  
+    _,idx = knn_point(nsample, xyz, new_xyz)    
+    grouped_xyz = group_point(xyz, idx)                                     # (batch_size, npoint, nsample, 3)
+    grouped_xyz -= tf.tile(tf.expand_dims(new_xyz, 2), [1,1,nsample,1])     # translation normalization
+
+    if features is not None:
+        grouped_features = group_point(features, idx)                           # (batch_size, npoint, nsample, channel)
+        if use_xyz:
+            new_features = tf.concat([grouped_xyz, grouped_features], axis=-1)  # (batch_size, npoint, nsample, 3+channel)
+        else:
+            new_features = grouped_features
+            #print("grouped_features",grouped_features)
+    else:
+        new_features = grouped_xyz
+
+    #Group States
+    if states is not None:
+        grouped_states = group_point(states, idx)                           # (batch_size, npoint, nsample, channel)
+        if use_xyz:
+            new_states = tf.concat([grouped_xyz, grouped_states], axis=-1)  # (batch_size, npoint, nsample, 3+channel)
+        else:
+            new_states = grouped_states
+    else:
+        new_states = grouped_xyz
+       
+           
+    return new_xyz, new_features, new_states, idx
+
+    
+
+def sample_and_group_0Z_sampling(npoint, radius, nsample, xyz, color,features, states, knn=False, use_xyz=True):
+    '''
+    Input:
+        npoint:         int32
+        radius:         float32
+        nsample:        int32
+        xyz:            (batch_size, ndataset, 3) TF tensor
+        features:       (batch_size, ndataset, channel) TF tensor, if None will just use xyz as features
+        color:          (batch_size, ndataset, 3) TF tensor, if None will just use xyz as features
+        knn:            bool, if True use kNN instead of radius search
+        use_xyz:        bool, if True concat XYZ with local point features, otherwise just use point features
+    Output:
+        new_xyz:        (batch_size, npoint, 3) TF tensor
+        new_points:     (batch_size, npoint, nsample, 3+channel) TF tensor
+        idx:            (batch_size, npoint, nsample) TF tensor, indices of local points as in ndataset points
+        grouped_xyz:    (batch_size, npoint, nsample, 3) TF tensor, normalized point XYZs (subtracted by seed point XYZ) in local regions
+    '''
+
+    #Group Points
+    # Explore the X-Y structure
+    xy = xyz[:,:,0:2]
+    zeros = tf.zeros((xyz.shape[0], xyz.shape[1], 1)) 
+    xy_space = tf.concat( (xy,zeros), axis = 2)
+    
+    
+    FPS_index =farthest_point_sample(npoint,xy_space)
+    new_xyz = gather_point(xyz, FPS_index)         # (batch_size, npoint, 3)
+    new_color  = gather_point(color, FPS_index)         # (batch_size, npoint, 3)
+    
+    
+    if knn:
+        _,idx = knn_point(nsample, xyz, new_xyz)    
+    else:
+        idx, pts_cnt = query_ball_point(radius, nsample, xyz, new_xyz)
+
+        
+    grouped_xyz = group_point(xyz, idx)                                     # (batch_size, npoint, nsample, 3)
+    grouped_xyz -= tf.tile(tf.expand_dims(new_xyz, 2), [1,1,nsample,1])     # translation normalization
+    
+    
+    #print("FPS_index",FPS_index)
+    #print("idx",FPS_index)
+    #Group Features
+    if features is not None:
+        grouped_features = group_point(features, idx)                           # (batch_size, npoint, nsample, channel)
+        if use_xyz:
+            new_features = tf.concat([grouped_xyz, grouped_features], axis=-1)  # (batch_size, npoint, nsample, 3+channel)
+        else:
+            new_features = grouped_features
+            #print("grouped_features",grouped_features)
+    else:
+        new_features = grouped_xyz
+
+    #Group States
+    if states is not None:
+        grouped_states = group_point(states, idx)                           # (batch_size, npoint, nsample, channel)
+        if use_xyz:
+            new_states = tf.concat([grouped_xyz, grouped_states], axis=-1)  # (batch_size, npoint, nsample, 3+channel)
+        else:
+            new_states = grouped_states
+    else:
+        new_states = grouped_xyz
+       
+
+    return new_xyz, new_color, new_features, new_states, idx, grouped_xyz
+
+
+
 
 def sample_and_group(npoint, radius, nsample, xyz, color,features, states, knn=False, use_xyz=True):
     '''
@@ -244,6 +349,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, group_al
         else:
             #original PointNET++ code
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_original(npoint, radius, nsample, xyz, points, knn, use_xyz)
+            #new_xyz, new_points, idx, grouped_xyz = sample_and_group_original(npoint, radius, 1, xyz, points, knn, use_xyz)
             #changed code
             #new_xyz, new_color, new_points, new_states, idx, grouped_xyz = sample_and_group(npoint, radius, nsample, xyz, xyz, points, xyz, knn, use_xyz)
 
