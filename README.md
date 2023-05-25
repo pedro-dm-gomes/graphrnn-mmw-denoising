@@ -13,11 +13,14 @@ The models were trained and evaluated with the following datasets:
 1. [Labelled mmW Point Cloud (50 sequences, 200 points per frame)][(https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8](https://drive.google.com/drive/folders/1rmNyCtOBnE2CfpLzESUh8q6zjPIi_DfS?usp=sharing))
 The path to this folder should be given as input to the network.
 
-Option 1
+Option 1\\
 Place the dataset in a directory as such:"/Pc/Deskotp/Dataset/200/all_runs_final"
 Give our path as input to train.py as  --data-dir argument example: "/Pc/Deskotp/Dataset/"
+
 This option requires you to have "200/all_runs_final" diretory structure.
-Option 2
+
+
+Option 2\\
 You can change the python files in the dataset diretory to match you directory.
 
 ## Usage
