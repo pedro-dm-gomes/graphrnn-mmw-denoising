@@ -11,40 +11,30 @@ The Makefiles to compile the code are in `modules/tf_ops`
 ### Datasets
 The models were trained and evaluated with the following datasets:
 1. [Labelled mmW Point Cloud (50 sequences, 200 points per frame)][(https://drive.google.com/drive/folders/1dHwhJ9NzrVlGN91MHuaodX62HMzftcN8](https://drive.google.com/drive/folders/1rmNyCtOBnE2CfpLzESUh8q6zjPIi_DfS?usp=sharing))
-The path to this folder should be given as input to the network.
-
-Option 1\\
-Place the dataset in a directory as such:"/Pc/Deskotp/Dataset/200/all_runs_final"
-Give our path as input to train.py as  --data-dir argument example: "/Pc/Deskotp/Dataset/"
-
-This option requires you to have "200/all_runs_final" diretory structure.
 
 
-Option 2\\
+Option 1<br />
+Place the dataset in a directory structured as such ":/PC/Deskotp/Dataset/200/all_runs_final"
+Give your path as input to train.py as  --data-dir argument example: "/Pc/Deskotp/Dataset/"
+This option requires you to have "/200/all_runs_final" diretory structure.
+
+Option 2<br />
 You can change the python files in the dataset diretory to match you directory.
 
 ## Usage
 
 To train and evaluate specific model and specific graph-rnn module
 
-    # PointNET Baseline
-    python  train-eval-split-mmW-GraphRNN.py   --version pointnet_v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 64 --out_channels 64 --num-points 200 --seq-length 1 --num-samples 8 --model PointNet_cls --context-frames 0 --restore-training 0
+    # PointNET Model
+    python train-eval-split-mmW-bari.py   --version v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_PointNet_cls   --restore-training 0
 
-    # GraphRNN Model
-    python train-eval-split-mmW-GraphRNN.py   --version v2 --bn_flag 0  --gpu 2 --graph_module Simple_GraphRNNCell  --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 8 --out_channels 64 --num-points 200 --seq-length 100 --num-samples 8 --model GraphRNN_cls  --down-points1 2 --down-points2 4 --down-points3 8 --drop_rate 0.4  --restore-training 0
+    # DGCNN Model
+    python train-eval-split-mmW-bari.py   --version v2 --bn_flag 1  --gpu 0 --graph_module DGCNN ---learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_DGCNN_cls    --restore-training 0
+
+
+    # K-Hop GNN Model
+    python train-eval-split-mmW-bari.py  --version v2 --bn_flag 0  --gpu 0 --graph_module GNN  --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_Basic_GNN_cls   --restore-training 0
     
-
-### Models
-The following  models are provided
-1. **GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between two frames (t) and (t-1) 
-3. **Stacked_GraphRNN_cls**: Each Graph-RNN cell learns dynamic features from a Spatio-temporal graph build between stacking frames: from frame (t, t-1, ... T_s)
- 
-### Graph-RNN Modules
-The following graph-rnn cells are provided:
-1. **Simple_GraphRNNCell**: Simple implementation of Graph-RNN cell (implemeted using tf.layers.conv2d)
-2. **Simple_GraphRNNCell_util**:Simple implementation of Graph-RNN cell (implemeted using tf_util lib from [1]), There is a problem with batch normalization
-
-## Visual Results
 
 
 
