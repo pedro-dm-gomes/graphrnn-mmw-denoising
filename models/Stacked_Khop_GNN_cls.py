@@ -29,6 +29,7 @@ def placeholder_inputs(batch_size, seq_length, num_points):
   
   return pointclouds_pl, labels_pl
   
+  
 def get_model(point_cloud, is_training, model_params):
   
   """ Classification PointNet, input is BxNx3, output BxNx2 """

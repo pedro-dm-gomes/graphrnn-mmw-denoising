@@ -26,14 +26,17 @@ You can change the python files in the dataset diretory to match you directory.
 To train and evaluate specific model and specific graph-rnn module
 
     # PointNET Model
-    python train-eval-split-mmW-bari.py   --version v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_PointNet_cls   --restore-training 0
+    python train-eval-split-mmW-bari.py  --data-split 11  --version v1 --bn_flag 1  --gpu 0 --graph_module PointNet --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_PointNet_cls   --restore-training 0
 
     # DGCNN Model
-    python train-eval-split-mmW-bari.py   --version v2 --bn_flag 1  --gpu 0 --graph_module DGCNN ---learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_DGCNN_cls    --restore-training 0
+    python train-eval-split-mmW-bari.py  --data-split 11  --version v2 --bn_flag 1  --gpu 0 --graph_module DGCNN ---learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_DGCNN_cls    --restore-training 0
 
 
     # K-Hop GNN Model
-    python train-eval-split-mmW-bari.py  --version v2 --bn_flag 0  --gpu 0 --graph_module GNN  --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_Basic_GNN_cls   --restore-training 0
+    python train-eval-split-mmW-bari.py --data-split 11  --version v2 --bn_flag 0  --gpu 0 --graph_module GNN  --learning-rate 1e-5 --data-dir /home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset --batch-size 32 --num-points 200 --seq-length 6 --num-samples 8 --model Stacked_Basic_GNN_cls   --restore-training 0
+
+    # To evaluate
+    python eval-debug=spli-mmW-bari.py -version v2  --bn_flag 1 --gpu 0   --graph_module GNN   --data-dir /scratch/uceepdg/Labelled_mmW/Not_Rotated_dataset --batch-size 1 --num-points 200 --seq-length  12 --num-samples 8 --model  Stacked_Basic_GNN_cls  --context-frames 0  --manual-restore 2    --data-split 11
     
 
 
