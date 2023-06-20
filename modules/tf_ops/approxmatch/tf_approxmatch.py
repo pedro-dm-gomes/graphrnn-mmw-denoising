@@ -56,7 +56,7 @@ if __name__=='__main__':
 	import numpy as np
 	import math
 	import random
-	import cv2
+	#import cv2
 
 
 	npoint=100
@@ -64,7 +64,7 @@ if __name__=='__main__':
 	pt_in=tf.placeholder(tf.float32,shape=(1,npoint*4,3))
 	mypoints=tf.Variable(np.random.randn(1,npoint,3).astype('float32'))
 	match=approx_match(pt_in,mypoints)
-	loss=tf.reduce_sum(match_cost(pt_in,mypoints,match))
+	loss= tf.reduce_sum(match_cost(pt_in,mypoints,match))
 	#match=approx_match(mypoints,pt_in)
 	#loss=tf.reduce_sum(match_cost(mypoints,pt_in,match))
 	#loss=tf.reduce_sum((distf+1e-9)**0.5)*0.5+tf.reduce_sum((distb+1e-9)**0.5)*0.5
@@ -87,6 +87,7 @@ if __name__=='__main__':
 			#trainmatch=trainmatch.transpose((0,2,1))
 			show=np.zeros((400,400,3),dtype='uint8')^255
 			trainmypoints=sess.run(mypoints)
+			"""
 			for i in xrange(len(tpoints[0])):
 				u=np.random.choice(range(len(trainmypoints[0])),p=trainmatch[0].T[i])
 				cv2.line(show,
@@ -103,3 +104,4 @@ if __name__=='__main__':
 			cmd=cv2.waitKey(10)%256
 			if cmd==ord('q'):
 				break
+			"""

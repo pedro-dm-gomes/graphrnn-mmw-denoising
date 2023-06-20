@@ -1,6 +1,6 @@
-import os
 import numpy as np
 import random
+import os
 
 def rotate_translate_jitter_pc(pc, angle, x,y,z):
     """
@@ -13,7 +13,6 @@ def rotate_translate_jitter_pc(pc, angle, x,y,z):
 	    px, py, pz = pc[p,0:3]
 	    
 	    # Do via Matrix mutiplication istead
-
 	    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy) + x + (np.random.rand() * (0.05 * 2) - 0.05 )
 	    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy) + y + (np.random.rand() * (0.05 * 2) - 0.05 )
 	    qz = pz + z  + (np.random.rand() * (0.05 * 2) - 0.05 )
@@ -40,64 +39,54 @@ class MMW(object):
 
         self.seq_length = seq_length
         self.num_points = num_points
+        #print("num_points:", num_points)
         self.data = []
-
-        log_nr = 0
-        print(" ===  MMW DATASET AUGUMENTED  ==== ")
-        root = root + '/' +str(num_points)
-        print("Root folder", root)
         
+        if ("Not_Rotated" in root):
+            ROTATED = False
+        else:
+            ROTATED = True
+            
+        
+        
+        log_nr = 0
+        root = root + '/' +str(num_points) + '/train'
         if train:
 
-            npy_files = [
-                "labels_run_3.npy",
-                "labels_run_4.npy",
-                "labels_run_6.npy",
-                "labels_run_7.npy",
-                "labels_run_8.npy",
-                "labels_run_9.npy",
-                "labels_run_10.npy",
-                "labels_run_11.npy",
-                "labels_run_12.npy",
-            ]
+            npy_files = os.listdir(root)
 
             # for fast debug
-            #npy_files = [ "labels_run_4.npy"]
-            
-            #Repeat array To futher augument
-            #npy_files =  np.repeat(npy_files, 2)
+            #npy_files =  ['labels_run_51.npy']
 
             for run in npy_files:
                 file_path = os.path.join(root, run)
+                #print("file_path", file_path)
                 npy_run = np.load(file_path)
-                #npy_run = npy_run[:, :, :, ]
-                print("[LOAD TRAIN] 70% File_path", file_path)
-                # print("npy_run", npy_run.shape)
                 npy_run = npy_run[0]
 
-                
-                # Cut 70% of frames
-                d_len = int(npy_run.shape[0]*0.7)
-                npy_run = npy_run[:d_len]
-
-             
                 """  Augmented Dataset """
                 #Direction: (It can move backward)
                 direction = 1
-                if np.random.rand() < 0.4: direction = -1
+                if np.random.rand() < 0.25: direction = -1
                 if (direction == -1):
                 	# Reverse Array order
                 	npy_run = np.flip(npy_run, axis = 0)
                 
                 # Rotate Translate and Jitter the point cloud
-                angle = x = y =0 # Dont rotate and dont translate
+                if ROTATED == True:
+                    angle =np.random.uniform(-4, 4)
+                    x  = np.random.uniform(-2, 2)
+                    y  =np.random.uniform(-2, 2)
+                else:
+                    angle = x = y =0  # Dont rotate and dont translate
                 # For each frame
                 for frame in range (0, npy_run.shape[0] ):
-                	npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
-                	npy_run[frame] =  shuffle_pc(npy_run[frame])
+                  npy_run[frame] = rotate_translate_jitter_pc(npy_run[frame], angle, x, y, 0)
+                  #npy_run[frame] =  shuffle_pc(npy_run[frame])
                 
                 self.data.append(npy_run)
-
+            
+            print("Train  data", np.shape(self.data) )
          
 
     def __len__(self):

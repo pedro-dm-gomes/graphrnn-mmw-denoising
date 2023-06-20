@@ -85,7 +85,7 @@ def conv1d(inputs,
   Returns:
     Variable tensor
   """
-  with tf.variable_scope(scope) as sc:
+  with tf.variable_scope(scope, reuse=tf.AUTO_REUSE) as sc:
     num_in_channels = inputs.get_shape()[-1].value
     kernel_shape = [kernel_size,
                     num_in_channels, num_output_channels]
@@ -101,6 +101,7 @@ def conv1d(inputs,
                               tf.constant_initializer(0.0))
     outputs = tf.nn.bias_add(outputs, biases)
 
+  with tf.variable_scope('bnn', reuse=tf.AUTO_REUSE) as sc:
     if bn:
       outputs = batch_norm_for_conv1d(outputs, is_training,
                                       bn_decay=bn_decay, scope='bn', is_dist=is_dist)
@@ -513,7 +514,7 @@ def batch_norm_dist_template(inputs, is_training, scope, moments_dims, bn_decay)
   Return:
       normed:        batch-normalized maps
   """
-  with tf.variable_scope(scope) as sc:
+  with tf.variable_scope(scope,reuse=tf.AUTO_REUSE) as sc:
     num_channels = inputs.get_shape()[-1].value
     beta = _variable_on_cpu('beta', [num_channels], initializer=tf.zeros_initializer())
     gamma = _variable_on_cpu('gamma', [num_channels], initializer=tf.ones_initializer())
@@ -722,6 +723,43 @@ def knn(adj_matrix, k=20):
   """
   neg_adj = -adj_matrix
   _, nn_idx = tf.nn.top_k(neg_adj, k=k)
+  return nn_idx
+
+def knn_and_values(adj_matrix, k=20):
+  """Get KNN based on the pairwise distance.
+  Args:
+    pairwise distance: (batch_size, num_points, num_points)
+    k: int
+
+  Returns:
+    nearest neighbors: (batch_size, num_points, k)
+  """
+  neg_adj = -adj_matrix
+  top_values, nn_idx = tf.nn.top_k(neg_adj, k=k)
+  return nn_idx, top_values
+
+def soft_knn(adj_matrix, k=20):
+  """Get KNN based on the pairwise distance.
+  Args:
+    pairwise distance: (batch_size, num_points, num_points)
+    k: int
+
+  Returns:
+    nearest neighbors: (batch_size, num_points, k)
+  """
+  print("adj_matrix", adj_matrix)
+  #adj_matrix = abs(adj_matrix)
+  soft_A =  tf.nn.softmax(adj_matrix)
+  print("soft_A", soft_A)
+  reshaped_soft_A = tf.reshape(soft_A, (soft_A.shape[0] *soft_A.shape[1], soft_A.shape[2]))
+  #idx_list =[]
+  #for b in range(0,soft_A.shape[0]):
+  
+  nn_idx = tf.multinomial(reshaped_soft_A, num_samples=k, output_dtype=tf.int32)
+  
+  nn_idx = tf.reshape(nn_idx, (soft_A.shape[0], soft_A.shape[1], k))
+  print("nn_idx", nn_idx)
+  #nn_idx = tf.cast(nn_idx, dtype=tf.int32)
   return nn_idx
 
 
