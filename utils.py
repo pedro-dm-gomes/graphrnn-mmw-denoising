@@ -21,9 +21,9 @@ import tensorflow as tf
 import keras
 from keras import layers
 
-import optuna
 import numpy as np
-from scipy import stats
+# import optuna
+# from scipy import stats
 import json
 import os
 import time
@@ -59,11 +59,11 @@ def load_train_test_data(init_path, train_filter=[], valid_filter=[], test_filte
         if "run_" in run:
             if (int(run.split('_')[-1]) in train_filter):
                 # train.extend(json.load(open(init_path+run+"/labelled_mmw_"+run+".json"))['labelled_mmw'])
-                train.extend(json.load(open(init_path+run+"/norm_mmw_"+run+".json"))['labelled_mmw'])
+                train.extend(json.load(open(init_path+run+"/stacked_mmw_"+run+".json"))['labelled_mmw'])
             elif (int(run.split('_')[-1]) in valid_filter):
-                valid.extend(json.load(open(init_path+run+"/labelled_mmw_"+run+".json"))['labelled_mmw'])
+                valid.extend(json.load(open(init_path+run+"/stacked_mmw_"+run+".json"))['labelled_mmw'])
             elif (int(run.split('_')[-1]) in test_filter):
-                test.extend(json.load(open(init_path+run+"/labelled_mmw_"+run+".json"))['labelled_mmw'])
+                test.extend(json.load(open(init_path+run+"/stacked_mmw_"+run+".json"))['labelled_mmw'])
     return train, valid, test
 
 def get_data_and_label(data, points_per_cloud=200):
@@ -125,7 +125,7 @@ def gnn_conv2d(inputs,
             filters,
             kernel_size,
             stride=[1],
-            padding='SAME',
+            padding='valid',
             use_xavier=True,
             stddev=1e-3,
             activation_fn=tf.nn.relu,
@@ -142,7 +142,7 @@ def gnn_conv2d(inputs,
     )(inputs)
 
     if bn: x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)
+    # x = layers.Dropout(0.4)(x)
     return x
 
 def gnn_dense(inputs,
@@ -159,7 +159,7 @@ def gnn_dense(inputs,
     )(inputs)
 
     if bn: x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.4)(x)
+    # x = layers.Dropout(0.4)(x)
     return x
 
 def lambda_get_adj_matr(input):
@@ -219,13 +219,13 @@ class CustomOrthogonalRegularizer(keras.regularizers.Regularizer):
 def gnn_tnet(inputs, num_dims, tnet_shapes, bn=False):
     batch_size = tf.shape(inputs)[0]
     for filt in tnet_shapes[0]:
-        x = gnn_conv2d(inputs, filters=filt, kernel_size=[1], bn=bn)
+        x = gnn_conv2d(inputs, filters=filt, kernel_size=1, bn=bn)
     # x = tf.reduce_max(x, axis=-2, keepdims=True)
     # for filt in tnet_shapes[1]:
     #     x = gnn_conv2d(inputs, filters=filt, kernel_size=[1], bn=bn)
-    x = layers.GlobalMaxPooling1D(keepdims=True)(x)
+    x = layers.GlobalMaxPooling1D()(x)
     # print(" [tnet] global maxpool 2d shape: ", x.shape)
-    x = layers.Lambda(lambda y: tf.reshape(y[0], (y[1], y[2])))( [x, batch_size, x.shape[-1]] )
+    # x = layers.Lambda(lambda y: tf.reshape(y[0], (y[1], y[2])))( [x, batch_size, x.shape[-1]] )
     # print(" [tnet] reshape: ", x.shape)
 
     for neur in tnet_shapes[2]:
@@ -270,15 +270,17 @@ class ValAccThresh_CB(keras.callbacks.Callback):
         # self.current_epoch += 1
         val_key = ""
         for k in logs.keys():
-            if "val" in k and "accuracy" in k:
+            if "val" in k and "metric" in k:
                 val_key = k
                 break
-        assert logs.get(val_key) != None, print(" Validation Accuracy not found", self.thresh, logs.get(val_key), val_key, logs.get(val_key) == None)
+        # print("Logs.get of ", val_key, ": ", logs.get(val_key))
+        assert logs.get(val_key) is not None, print(" Validation Accuracy not found", self.thresh, logs.get(val_key), val_key)
 
         current = logs.get(val_key)
         # current = logs.get("val_sparse_categorical_accuracy")
         # current = logs.get("val_accuracy")
         if current >= self.thresh:
+            # print("Current value: ", current, " | Threshold: ", self.thresh)
             self.thresh = current
             self.model.save_weights(self.experiments_path+self.test_name+"/best_weights/cp-"+str(epoch)+".ckpt")
             print(" New good model saved.")
