@@ -8,9 +8,10 @@
 
 \.vscode/
 
-#data
+data
 experiments
 gnn.db
+databases
 
 # Distribution / packaging
 .Python
