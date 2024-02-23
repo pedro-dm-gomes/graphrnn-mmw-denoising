@@ -12,4 +12,5 @@ docker run --rm -it --privileged \
 	-v /tmp/.X11-unix/:/tmp/.X11-unix \
         -v ~/.Xauthority:/root/.Xauthority \
 	-v ./:/root/ws/ \
+	--workdir /root/ws \
 	gnnmmwave bash
