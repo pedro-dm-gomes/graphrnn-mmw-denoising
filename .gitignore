@@ -12,6 +12,7 @@ data
 experiments
 gnn.db
 databases
+__pycache__
 
 # Distribution / packaging
 .Python
