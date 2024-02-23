@@ -26,6 +26,12 @@ from utils import gnn_conv2d, gnn_dense, \
 # Where datasets are stored
 run_path = "data/"
 experiments_path = "experiments/"
+DEVICE="GPU"
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for gpu in gpus:
+  tf.config.experimental.set_memory_growth(gpu, True)
+
 
 
 def build_model(inputs, 
@@ -74,7 +80,7 @@ def build_model(inputs,
         for gc_filt in l[0]:
             x = gnn_conv2d(x, gc_filt, [1], bn=False)
         
-        feat_T = gnn_tnet(x, l[0][-1], tnet_shape[0], bn=False)
+        feat_T = gnn_tnet(x, l[0][-1], tnet_shape[1], bn=False)
         # print(" [main] tnet shape: ", inputs.shape, feat_T.shape)
         x = layers.Dot(axes=(-1, -2))([x, feat_T]) # Apply affine transformation to input features
         # x = tf.reduce_max(x, axis=-2, keepdims=True)
@@ -169,7 +175,7 @@ if __name__ == "__main__":
     valid_x, valid_y = get_data_and_label2(valid)
     test_x, test_y = get_data_and_label2(test)
     
-    test_name = "manual_test_regress_10"
+    test_name = "manual_test_regress_01"
 
     k=16
     batch_size=128
@@ -190,9 +196,11 @@ if __name__ == "__main__":
 
     inputs = keras.Input(shape=(None, 3))
 
-    tnet_shape = [[[32, 64, 256, 512], [8], [512, 128]]]
-    conv_gnns = [[[256,512, 1024], [512, 128]]]
-    dense_gnn = [512,128]
+    # TNET : first list is CNN, second list is dense
+    tnet_shape = [[[256, 256,], [512, 256]],
+                  [[256, 128,], [128,128]]]
+    conv_gnns = [[[256,256], [128]]]
+    dense_gnn = [512, 256,128]
 
     outputs = build_model(inputs,
                         num_points, num_dims, k,
@@ -206,10 +214,12 @@ if __name__ == "__main__":
 
     opt_pi = tf.optimizers.Adam(learning_rate=lr)
 
-    def custom_loss(y_true, y_pred):
-        return tf.math.reduce_mean(tf.math.square(y_true*100 - y_pred*100), axis=-1)
+    # def custom_loss(y_true, y_pred):
+    #     return tf.math.reduce_mean(tf.math.square(y_true*100 - y_pred*100), axis=-1)
+
+    model.compile(loss='huber', optimizer=opt_pi, metrics=[CustomMetric()])
+    # model.compile(loss=custom_loss, optimizer=opt_pi, metrics=[CustomMetric()])
     # model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=opt_pi, metrics=[keras.metrics.SparseCategoricalAccuracy()])
-    model.compile(loss=custom_loss, optimizer=opt_pi, metrics=[CustomMetric()])
 
     # Try to load the model. If it does not exist, create it.
     # latest = tf.train.latest_checkpoint(experiments_path+test_name+"/")
@@ -232,7 +242,7 @@ if __name__ == "__main__":
     history_logger=tf.keras.callbacks.CSVLogger(filename, separator=",", append=True)
 
     # Use CPU as default due to GPU's memory issues
-    with tf.device('/GPU:0'):
+    with tf.device(DEVICE):
         history = model.fit(
             train_x,
             train_y,
@@ -245,8 +255,8 @@ if __name__ == "__main__":
             # validation_split=0.3,
             validation_data=(valid_x, valid_y),
             epochs=3000,
-            shuffle=True,
+            # shuffle=True,
             callbacks=[ValAccThresh_CB(thresh=0.85, experiments_path=experiments_path, test_name=test_name), cp_callback, history_logger],
-            use_multiprocessing=True,
-            workers=8,
+            # use_multiprocessing=True,
+            # workers=8,
         )

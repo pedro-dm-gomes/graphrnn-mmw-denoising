@@ -228,7 +228,7 @@ def gnn_tnet(inputs, num_dims, tnet_shapes, bn=False):
     # x = layers.Lambda(lambda y: tf.reshape(y[0], (y[1], y[2])))( [x, batch_size, x.shape[-1]] )
     # print(" [tnet] reshape: ", x.shape)
 
-    for neur in tnet_shapes[2]:
+    for neur in tnet_shapes[1]:
         x = gnn_dense(x, neur, bn)
     
     bias = keras.initializers.Constant(np.eye(num_dims).flatten())
@@ -470,7 +470,7 @@ def objective(trial):
             epochs=150 - latest_ep, # Train for 150 epochs to find the configuration that can later be trained for more epochs.
             shuffle=True,
             callbacks=[ValAccThresh_CB(thresh=0.9), cp_callback, history_logger],
-            use_multiprocessing=False,
-            workers=8,
+            # use_multiprocessing=False,
+            # workers=8,
         )
     return np.mean(history.history['val_sparse_categorical_accuracy'][-10:])
