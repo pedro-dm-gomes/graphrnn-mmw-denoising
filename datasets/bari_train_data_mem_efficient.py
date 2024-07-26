@@ -57,14 +57,15 @@ def get_dataset_split(split_number):
                         
                         
   
-    test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
+    # test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
+    test_npy_files = [ 'run_' + str(num) for num in test_npy_files]
 
     return test_npy_files
 
 class MMW(object):
     def __init__(
         self,
-        root="/home/uceepdg/profile.V6/Desktop/Datasets/Labelled_mmW/Not_Rotated_dataset",
+        root="./data",
         seq_length=100,
         num_points=200,
         train=True,
@@ -81,7 +82,7 @@ class MMW(object):
         
         
         log_nr = 0
-        root = root + '/' +str(num_points) + '/all_runs_final'
+        # root = root + '/' +str(num_points) + '/all_runs_final'
         if train:
 
             # load all files

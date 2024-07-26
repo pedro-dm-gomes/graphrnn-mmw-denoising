@@ -46,7 +46,7 @@ class MMW(object):
 
         log_nr = 0
         # print(" MMW DATASET ")
-        root = root + '/' +str(num_points)+ '/all_runs_final'
+        # root = root + '/' +str(num_points)+ '/all_runs_final'
         if not(train):
 
 

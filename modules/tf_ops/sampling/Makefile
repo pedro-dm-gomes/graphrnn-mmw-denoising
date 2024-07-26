@@ -1,4 +1,5 @@
 CUDA_HOME := /apps/cuda/cuda-9.0
+CUDA_HOME = /usr/local/cuda
 CUDNN_HOME := /apps/cuda/cudnn-7.2.1
 
 TF_INC = `python3 -c "import tensorflow; print(tensorflow.sysconfig.get_include())"`
