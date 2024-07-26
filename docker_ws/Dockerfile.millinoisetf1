@@ -1,0 +1,36 @@
+FROM tensorflow/tensorflow:1.12.3-gpu-py3
+
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/3bf863cc.pub
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
+RUN apt update && apt upgrade -y
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    unzip \
+    vim
+
+RUN apt install -y make build-essential libssl-dev zlib1g-dev \
+    libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev \
+    libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev \
+    libgdbm-dev libnss3-dev libedit-dev libc6-dev
+
+WORKDIR /tmp
+RUN wget https://www.python.org/ftp/python/3.6.15/Python-3.6.15.tgz
+RUN tar -xzf Python-3.6.15.tgz
+RUN cd Python-3.6.15 && \
+    ./configure --enable-optimizations -with-lto --with-pydebug && \
+    make -j 16 && \
+    make altinstall
+
+RUN ln -s /usr/local/bin/python3.6 /usr/local/bin/python3
+RUN ln -s /usr/local/bin/python3.6 /usr/local/bin/python
+RUN apt remove -y python3-pip
+RUN python3 -m pip install --upgrade pip
+
+RUN pip3 install numpy==1.19.5
+RUN pip3 install matplotlib==3.3.4
+RUN apt -y install gfortran libopenblas-dev liblapack-dev
+RUN pip3 install scipy==1.5.4
+RUN pip3 install wheel cython
+COPY ./requirements.txt /tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt
