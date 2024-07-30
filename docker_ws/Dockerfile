@@ -1,8 +1,8 @@
 #FROM nvidia/cuda:12.0.0-runtime-ubuntu22.04
-FROM tensorflow/tensorflow:2.10.0-gpu
-
 FROM ros:noetic AS ros_base
+FROM tensorflow/tensorflow:2.10.0-gpu AS tf_base
 
+COPY --from=ros_base / /
 
 RUN apt update && apt upgrade -y && apt install -y python3 python3-pip
 

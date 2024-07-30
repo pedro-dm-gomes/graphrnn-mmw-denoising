@@ -1,1 +1,1 @@
-sudo docker build --rm -t gnnmmwave -f Dockerfile .
+docker build --rm -t gnnmmwave -f Dockerfile .
