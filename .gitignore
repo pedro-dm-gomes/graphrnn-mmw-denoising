@@ -6,9 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# ignore pyc files
+*.pyc
+
 data
 experiments
 gnn.db
+new_outputs_mmw
 
 # Distribution / packaging
 .Python
