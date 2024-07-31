@@ -57,9 +57,10 @@ class MMW(object):
             # For each run calculate the limit
             for run in npy_files:
                 file_path = os.path.join(root, run)
+                print(" file_path", file_path)
                 npy_run = np.load(file_path)
                 #print("[LOAD EVAL] 30% File_path", file_path)
-                npy_run = npy_run[0]
+                # npy_run = npy_run[0]
                 
                 # Cut 70% of frames
                 #d_len = int(npy_run.shape[0]*0.7)

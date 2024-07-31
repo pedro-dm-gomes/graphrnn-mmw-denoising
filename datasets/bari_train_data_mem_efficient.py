@@ -127,7 +127,8 @@ class MMW(object):
         
         log_data_path = self.data[idx1]
         npy_run = np.load(log_data_path)
-        npy_run = npy_run[0]
+        # print("data shape: ", npy_run.shape)
+        # npy_run = npy_run[0]
         
         total_lenght = npy_run.shape[0]
         

@@ -20,7 +20,7 @@ sys.path.append(os.path.join(BASE_DIR, 'models'))
 parser = argparse.ArgumentParser()
 """ --  Training  hyperparameters --- """
 parser.add_argument('--gpu', default='0', help='Select GPU to run code [default: 0]')
-parser.add_argument('--data-dir', default='./data', help='Dataset directory')
+parser.add_argument('--data-dir', default='./data/npys', help='Dataset directory')
 parser.add_argument('--batch-size', type=int, default=8, help='Batch Size during training [default: 16]')
 parser.add_argument('--data-split', type=int, default=0, help='Select the train/test/ data split  [default: 0,1,2]')
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
@@ -176,6 +176,7 @@ def get_batch(dataset, batch_size):
     batch_data = []
     for i in range(batch_size):
         sample = dataset[0]
+        print("sample", np.shape(sample))
         batch_data.append(sample)
     return np.stack(batch_data, axis=0)
 
@@ -483,6 +484,7 @@ def train_one_epoch(sess,ops,train_writer, epoch):
       # Load Batch Data at Random 
       batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
       batch = np.array(batch_data)
+      print("\n\n\n\n\n\n\ntest_seq", np.shape(batch))
       input_point_clouds = batch[:,:,:,0:3]
       input_labels = batch[:,:,:,3:4]
       
