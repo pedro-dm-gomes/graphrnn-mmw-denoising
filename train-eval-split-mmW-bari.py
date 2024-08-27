@@ -16,6 +16,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 sys.path.append(os.path.join(BASE_DIR, 'models'))
 
+# physical_devices = tf.config.experimental.list_physical_devices('GPU') 
+# tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 parser = argparse.ArgumentParser()
 """ --  Training  hyperparameters --- """
@@ -66,7 +68,7 @@ np.random.seed(999)
 tf.set_random_seed(999)
 
 # Define the GPU to run the code
-os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
+# os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 
 # Flags
 BATCH_SIZE = args.batch_size
@@ -182,7 +184,7 @@ def get_batch(dataset, batch_size):
 
 
 def get_bn_decay(batch):
-    bn_momentum = tf.train.exponential_decay(
+    bn_momentum = tf.compat.v1.train.exponential_decay(
                       BN_INIT_DECAY,
                       batch*BATCH_SIZE,
                       BN_DECAY_DECAY_STEP,
@@ -192,7 +194,7 @@ def get_bn_decay(batch):
     return bn_decay
     
 def get_learning_rate(batch):
-    learning_rate = tf.train.exponential_decay(
+    learning_rate = tf.compat.v1.train.exponential_decay(
                         BASE_LEARNING_RATE,  # Base learning rate.
                         batch * BATCH_SIZE,  # Current index into the dataset.
                         DECAY_STEP,          # Decay step.
@@ -205,7 +207,7 @@ def get_ReduceOnPlateu_learning_rate(lr_patience):
     learning_rate = BASE_LEARNING_RATE
     
     print("learning_rate", learning_rate)
-    learning_rate = tf.train.natural_exp_decay(
+    learning_rate = tf.compat.v1.train.natural_exp_decay(
                         BASE_LEARNING_RATE,  # Base learning rate.
                         lr_patience,  # Current index into the dataset.
                         1, #DECAY_STEP,          # Decay step.
@@ -239,7 +241,7 @@ def train():
     
     if args.weight_decay == 0: bn_decay = 0.0
     else: bn_decay = get_bn_decay(batch) 
-    tf.summary.scalar('bn_decay', bn_decay)
+    tf.compat.v1.summary.scalar('bn_decay', bn_decay)
         
     model_params = {'context_frames': int(int(args.context_frames)),
   	   	    'num_samples': int(args.num_samples),
@@ -257,15 +259,15 @@ def train():
     # Normal Loss
     if args.balanced_loss == 0:
       loss = MODEL.get_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-      tf.summary.scalar('BCE_loss', loss)
+      tf.compat.v1.summary.scalar('BCE_loss', loss)
     if args.balanced_loss == 1:
       # Balanced Loss
       loss = MODEL.get_balanced_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-      tf.summary.scalar('balanced_loss', loss)
+      tf.compat.v1.summary.scalar('balanced_loss', loss)
     if args.balanced_loss == 2:
       # Balanced Loss
       loss = MODEL.get_MSE_loss(pred, labels_pl, context_frames = model_params['context_frames'])
-      tf.summary.scalar('MSE_loss', loss)
+      tf.compat.v1.summary.scalar('MSE_loss', loss)
       
     
   
@@ -283,17 +285,17 @@ def train():
     regularizer = tf.contrib.layers.l2_regularizer(regularizer_scale)
     reg_term = tf.contrib.layers.apply_regularization(regularizer,params_to_be_regulaized)
     #print("reg_term", reg_term)
-    #tf.summary.scalar('reg_term', reg_term)
+    #tf.compat.v1.summary.scalar('reg_term', reg_term)
     
-    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    reg_losses = tf.compat.v1.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
     reg_losses= sum(reg_losses)
-    tf.summary.scalar('reg_losses', reg_losses  )
+    tf.compat.v1.summary.scalar('reg_losses', reg_losses  )
     loss =  loss + regularizer_alpha * reg_losses
-    tf.summary.scalar('total_loss', loss)
+    tf.compat.v1.summary.scalar('total_loss', loss)
     
     # Calculate accuracy tensor
     accuracy = get_acurracy_tensor(pred, labels_pl,BATCH_SIZE,SEQ_LENGTH, NUM_POINTS, context_frames = model_params['context_frames'])
-    tf.summary.scalar('accuracy', accuracy)
+    tf.compat.v1.summary.scalar('accuracy', accuracy)
 
     # Get training operator
     if args.lr_scheduler == 0: 
@@ -304,17 +306,17 @@ def train():
       learning_rate = get_ReduceOnPlateu_learning_rate(lr_patience)       
     if (is_training_pl == False): learning_rate = 0.0
     
-    tf.summary.scalar('learning_rate', learning_rate)
-    tf.summary.scalar('lr_patience', lr_patience)
+    tf.compat.v1.summary.scalar('learning_rate', learning_rate)
+    tf.compat.v1.summary.scalar('lr_patience', lr_patience)
     
   
     gradients = tf.gradients(loss, params)
     clipped_gradients, norm = tf.clip_by_global_norm(gradients, args.max_gradient_norm)
     clipped_gradients = gradients # no gradient cliping
-    train_op = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
+    train_op = tf.compat.v1.train.AdamOptimizer(learning_rate).apply_gradients(zip(clipped_gradients, params), global_step=batch)    
 
-    saver = tf.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours = 5)
-    saver_best = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver(max_to_keep=10, keep_checkpoint_every_n_hours = 5)
+    saver_best = tf.compat.v1.train.Saver()
     
     print(" Trainable paramenters: ")
     params = tf.trainable_variables()
@@ -324,16 +326,18 @@ def train():
       c= c +1
     
     # Create a session
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
+    # config.gpu_options.per_process_gpu_memory_fraction = 0.9
     config.gpu_options.allow_growth = True
+    # config.gpu_options.polling_inactive_delay_msecs = 10
     config.allow_soft_placement = True
     config.log_device_placement = False
-    sess = tf.Session( config =config)
+    sess = tf.compat.v1.Session( config =config)
     
     # Add summary writers
-    merged = tf.summary.merge_all()
-    train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
-    test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'))
+    merged = tf.compat.v1.summary.merge_all()
+    train_writer = tf.compat.v1.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
+    test_writer = tf.compat.v1.summary.FileWriter(os.path.join(LOG_DIR, 'test'))
 
     # Init variables
     #init = tf.initialize_all_variables()
@@ -344,12 +348,12 @@ def train():
 
 
     if args.restore_training == 0:
-      init = tf.global_variables_initializer()
+      init = tf.compat.v1.global_variables_initializer()
       sess.run(init)
       ckpt_number = 0 
     if args.restore_training == 1:
       # Restore Session from last check-point  
-      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      checkpoint_path_automatic = tf.compat.v1.train.latest_checkpoint(LOG_DIR)
       ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
       restore_checkpoint_path = checkpoint_path_automatic
       ckpt_number=ckpt_number[11:]
@@ -362,7 +366,7 @@ def train():
             
     if args.restore_training == 2:
       # Get the last checkpoint number
-      checkpoint_path_automatic = tf.train.latest_checkpoint(LOG_DIR)
+      checkpoint_path_automatic = tf.compat.v1.train.latest_checkpoint(LOG_DIR)
       ckpt_number = os.path.basename(os.path.normpath(checkpoint_path_automatic))
       ckpt_number=ckpt_number[11:]
       ckpt_number=int(ckpt_number)
@@ -424,9 +428,9 @@ def train():
              
         # Restore Checkpoint
         """  BUG! In some modules the weights are updated during evaluation """
-        ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
-        print ("\n** Restore from checkpoint ***: ", tf.train.latest_checkpoint(LOG_DIR))
-        saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
+        ckpt_number = os.path.basename(os.path.normpath(tf.compat.v1.train.latest_checkpoint(LOG_DIR)))
+        print ("\n** Restore from checkpoint ***: ", tf.compat.v1.train.latest_checkpoint(LOG_DIR))
+        saver.restore(sess, tf.compat.v1.train.latest_checkpoint(LOG_DIR))
         ckpt_number= int( ckpt_number[11:] )
         np.random.seed(ckpt_number)
         tf.set_random_seed(ckpt_number)  

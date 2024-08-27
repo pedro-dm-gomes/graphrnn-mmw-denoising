@@ -1,1 +1,1 @@
-docker build --rm -t millinoise:tf1 -f Dockerfile.millinoisetf1 .
+docker build --rm -t millinoise:tf1 -f Dockerfile.millinoisetf1.v2 .
