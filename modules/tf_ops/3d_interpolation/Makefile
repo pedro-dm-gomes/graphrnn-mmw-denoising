@@ -5,7 +5,7 @@ CUDNN_HOME := /usr/lib/x86_64-linux-gnu
 
 TF_INC = `python3 -c "import tensorflow; print(tensorflow.sysconfig.get_include())"`
 TF_LIB = `python3 -c "import tensorflow as tf; print(tf.sysconfig.get_lib())"`
-TF_LIB1 = /usr/local/lib/python3.6/dist-packages/tensorflow_core
+TF_LIB1 = /usr/local/lib/python3.6/dist-packages/tensorflow
 TF_LIB2 = /usr/local/cuda/lib64
 
 $(info var is $(TF_LIB))

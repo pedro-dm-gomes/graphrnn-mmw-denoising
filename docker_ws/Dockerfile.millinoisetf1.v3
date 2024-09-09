@@ -1,0 +1,90 @@
+FROM ubuntu:16.04
+
+RUN apt update && apt upgrade -y
+
+RUN apt install -y \
+    build-essential \
+    cmake \
+    git \
+    libboost-all-dev \
+    libeigen3-dev \
+    libflann-dev \
+    libgmp-dev \
+    libmpfr-dev \
+    libtbb-dev \
+    libtool \
+    libxml2-dev \
+    pkg-config \
+    wget
+
+RUN apt purge python* -y
+RUN apt install software-properties-common -y
+
+RUN add-apt-repository -y ppa:jblgf0/python
+RUN apt update
+RUN apt install python3.6 -y
+
+RUN rm /usr/bin/python3
+RUN ln -s /usr/bin/python3.6 /usr/bin/python3
+
+RUN apt install python3-pip -y
+RUN pip3 install --upgrade pip==20.2
+
+RUN pip3 install tensorflow==1.12.3
+RUN cd /tmp && wget https://files.pythonhosted.org/packages/55/7e/bec4d62e9dc95e828922c6cec38acd9461af8abe749f7c9def25ec4b2fdb/tensorflow_gpu-1.12.0-cp36-cp36m-manylinux1_x86_64.whl
+RUN pip3 install /tmp/tensorflow_gpu-1.12.0-cp36-cp36m-manylinux1_x86_64.whl
+RUN pip3 install numpy==1.19.5
+RUN pip3 install matplotlib==3.3.4
+RUN apt -y install gfortran libopenblas-dev liblapack-dev
+RUN pip3 install scipy==1.5.4
+RUN pip3 install wheel cython
+# RUN pip3 install tensorflow-gpu
+# RUN cd /tmp && wget https://files.pythonhosted.org/packages/a5/ad/933140e74973fb917a194ab814785e7c23680ca5dee6d663a509fe9579b6/tensorflow_gpu-1.15.0-cp36-cp36m-manylinux2010_x86_64.whl
+# RUN pip3 install /tmp/tensorflow_gpu-1.15.0-cp36-cp36m-manylinux2010_x86_64.whl
+COPY ./requirements.txt /tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt
+
+# WRONG. RUN DEBIAN_FRONTEND=noninteractive apt install -y nvidia-384
+WORKDIR /tmp
+RUN wget https://developer.nvidia.com/compute/cuda/9.0/Prod/local_installers/cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64-deb
+RUN dpkg -i cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64-deb
+RUN apt-key add /var/cuda-repo-9-0-local/7fa2af80.pub
+RUN cd /var/cuda-repo-9-0-local/ && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/3bf863cc.pub
+RUN apt-key add /var/cuda-repo-9-0-local/3bf863cc.pub
+# RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+#     locale-gen
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV TZ=Europe/Rome
+RUN DEBIAN_FRONTEND=noninteractive apt update && apt install -y tzdata
+RUN DEBIAN_FRONTEND=noninteractive apt install -y cuda-toolkit-9-0 cuda-9-0
+
+# COPY ./libcudnn7_7.5.1.10-1+cuda9.0_amd64.deb /tmp/libcudnn7_7.5.1.10-1+cuda9.0_amd64.deb
+RUN cd /tmp && wget https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64/libcudnn7_7.5.1.10-1+cuda9.0_amd64.deb
+RUN dpkg -i /tmp/libcudnn7_7.5.1.10-1+cuda9.0_amd64.deb
+
+RUN mv /usr/bin/nvidia-smi /usr/bin/nvidia-smi.bak
+RUN mv /usr/bin/nvidia-debugdump /usr/bin/nvidia-debugdump.bak
+RUN mv /usr/bin/nvidia-persistenced /usr/bin/nvidia-persistenced.bak
+RUN mv /usr/bin/nvidia-cuda-mps-control /usr/bin/nvidia-cuda-mps-control.bak
+RUN mv /usr/bin/nvidia-cuda-mps-server /usr/bin/nvidia-cuda-mps-server.bak
+RUN mv /usr/bin/nvidia-settings /usr/bin/nvidia-settings.bak
+RUN mv /usr/bin/nvidia-xconfig /usr/bin/nvidia-xconfig.bak
+
+# ln -s /usr/lib/x86_64-linux-gnu/libcuda.so.384.130 /usr/lib/x86_64-linux-gnu/libcuda.so.1
+
+# latest error:
+# tensorflow.python.framework.errors_impl.InternalError: Blas xGEMMBatched launch failed
+
+# RUN wget https://developer.nvidia.com/compute/cuda/9.0/Prod/patches/1/cuda-repo-ubuntu1604-9-0-local-cublas-performance-update_1.0-1_amd64-deb
+# RUN dpkg -i ./cuda-repo-ubuntu1604-9-0-local-cublas-performance-update_1.0-1_amd64-deb 
+# RUN apt update && apt upgrade -y
+# RUN wget https://developer.nvidia.com/compute/cuda/9.0/Prod/patches/2/cuda-repo-ubuntu1604-9-0-local-cublas-performance-update-2_1.0-1_amd64-deb
+# RUN dpkg -i cuda-repo-ubuntu1604-9-0-local-cublas-performance-update-2_1.0-1_amd64-deb 
+# RUN apt update && apt upgrade -y
+# RUN wget https://developer.nvidia.com/compute/cuda/9.0/Prod/patches/3/cuda-repo-ubuntu1604-9-0-local-cublas-performance-update-3_1.0-1_amd64-deb
+# RUN dpkg -i cuda-repo-ubuntu1604-9-0-local-cublas-performance-update-3_1.0-1_amd64-deb 
+# RUN apt update && apt upgrade -y
+# RUN wget https://developer.nvidia.com/compute/cuda/9.0/Prod/patches/4/cuda-repo-ubuntu1604-9-0-176-local-patch-4_1.0-1_amd64-deb
+# RUN dpkg -i cuda-repo-ubuntu1604-9-0-176-local-patch-4_1.0-1_amd64-deb 
+# RUN apt update && apt upgrade -y

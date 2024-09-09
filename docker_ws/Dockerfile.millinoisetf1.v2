@@ -41,6 +41,20 @@ RUN apt install -y cuda-toolkit-9-0
 RUN echo "PATH=$PATH:/usr/local/cuda/lib64" >> ~/.bashrc
 RUN echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64" >> ~/.bashrc
 
+RUN rm -rf /usr/bin/nvidia-smi
+RUN rm -rf /usr/bin/nvidia-cuda-mps-control
+RUN rm -rf /usr/bin/nvidia-cuda-mps-server
+RUN rm -rf /usr/bin/nvidia-debugdump
+RUN rm -rf /usr/bin/nvidia-persistenced 
+RUN rm -rf /usr/bin/nvidia-xconfig
+
+RUN rm -rf /usr/lib/x86_64-linux-gnu/libcuda.so.1
+RUN rm -rf /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1
+RUN ln -s /usr/lib/x86_64-linux-gnu/libcuda.so.384.130 \
+    /usr/lib/x86_64-linux-gnu/libcuda.so.1
+RUN ln -s /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.384.130 \
+    /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1
+
 # apt install -y pkg-config libhdf5-dev python3-h5py
 # pip3 install h5py==2.9.
 # pip3 install grpcio==1.42
