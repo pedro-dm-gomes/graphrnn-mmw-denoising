@@ -333,7 +333,7 @@ def train():
     # Create a session
     config = tf.ConfigProto()
     # config.gpu_options.per_process_gpu_memory_fraction = 0.9
-    config.gpu_options.allow_growth = True
+    # config.gpu_options.allow_growth = True
     # config.gpu_options.polling_inactive_delay_msecs = 10
     config.allow_soft_placement = True
     config.log_device_placement = False
