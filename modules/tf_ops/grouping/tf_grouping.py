@@ -55,10 +55,10 @@ def knn_point(k, xyz1, xyz2):
         val: (batch_size, npoint, k) float32 array, L2 distances
         idx: (batch_size, npoint, k) int32 array, indices to input points
     '''
-    b = xyz1.get_shape()[0].value
-    n = xyz1.get_shape()[1].value
-    c = xyz1.get_shape()[2].value
-    m = xyz2.get_shape()[1].value
+    b = xyz1.get_shape()[0]
+    n = xyz1.get_shape()[1]
+    c = xyz1.get_shape()[2]
+    m = xyz2.get_shape()[1]
     
 
     xyz1 = tf.tile(tf.reshape(xyz1, (b,1,n,c)), [1,m,1,1])
@@ -83,10 +83,10 @@ def knn_feat(xyz1, xyz2):
         val: (batch_size, npoint, k) float32 array, L2 distances
         idx: (batch_size, npoint, k) int32 array, indices to input points
     '''
-    b = xyz1.get_shape()[0].value
-    n = xyz1.get_shape()[1].value
-    c = xyz1.get_shape()[2].value
-    m = xyz2.get_shape()[1].value
+    b = xyz1.get_shape()[0]
+    n = xyz1.get_shape()[1]
+    c = xyz1.get_shape()[2]
+    m = xyz2.get_shape()[1]
     
     print("xyz1",xyz1)
     print("xyz2",xyz2)
@@ -124,12 +124,13 @@ if __name__=='__main__':
             grouped_points = group_point(points, idx)
             #grouped_points_grad = tf.ones_like(grouped_points)
             #points_grad = tf.gradients(grouped_points, points, grouped_points_grad)
-    with tf.Session('') as sess:
-        now = time.time()
-        for _ in range(100):
-            ret = sess.run(grouped_points)
-        print(time.time() - now)
-        print(ret.shape, ret.dtype)
-        print(ret)
+    print(grouped_points.shape, grouped_points.dtype)
+    # with tf.Session('') as sess:
+    #     now = time.time()
+    #     for _ in range(100):
+    #         ret = sess.run(grouped_points)
+    #     print(time.time() - now)
+    #     print(ret.shape, ret.dtype)
+    #     print(ret)
 
 

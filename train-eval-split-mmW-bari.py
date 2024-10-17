@@ -5,7 +5,8 @@ from datetime import datetime
 import argparse
 import numpy as np
 from PIL import Image
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from datasets.bari_train_data_mem_efficient import MMW as Dataset_mmW
 #from datasets.bari_train_data import MMW as Dataset_mmW
 from datasets.bari_val_data import MMW as Dataset_mmW_val
@@ -88,7 +89,7 @@ BN_DECAY_DECAY_STEP = float(DECAY_STEP)
 BN_DECAY_CLIP = 0.99
 
 PATIENCE_LIMIT = 50
-lr_patience = 0
+lr_patience = 0.
 
 """  Setup Directorys """
 MODEL = importlib.import_module(args.model) # import network module
@@ -236,8 +237,8 @@ def train():
     print("labels_pl", labels_pl)
     print("is_training_pl:", is_training_pl)
 
-    batch = tf.Variable(0)
-    lr_patience  = tf.Variable(0)
+    batch = tf.Variable(0.)
+    lr_patience  = tf.Variable(0.)
     
     if args.weight_decay == 0: bn_decay = 0.0
     else: bn_decay = get_bn_decay(batch) 
@@ -255,6 +256,7 @@ def train():
   	   	    'sampled_points_down3':args.down_points3}
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
+    print("Model loaded. \n\n\n\n\n\n")
     
     # Normal Loss
     if args.balanced_loss == 0:
@@ -282,15 +284,18 @@ def train():
       if ( ('weight' in layer.name)  or ('bias' in layer.name) ) :
         params_to_be_regulaized.append(layer)
 
-    regularizer = tf.contrib.layers.l2_regularizer(regularizer_scale)
-    reg_term = tf.contrib.layers.apply_regularization(regularizer,params_to_be_regulaized)
+    # regularizer = tf.keras.regularizers.l2(regularizer_scale)(params_to_be_regulaized)
+    # reg_term = tf.contrib.layers.apply_regularization(regularizer,params_to_be_regulaized)
     #print("reg_term", reg_term)
     #tf.summary.scalar('reg_term', reg_term)
     
-    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-    reg_losses= sum(reg_losses)
-    tf.summary.scalar('reg_losses', reg_losses  )
-    loss =  loss + regularizer_alpha * reg_losses
+    # reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    # print("reg_losses", reg_losses)
+    # reg_losses= sum(reg_losses)
+    # print("reg_losses", reg_losses)
+    # exit()
+    # tf.summary.scalar('reg_losses', reg_losses  )
+    loss =  loss #+ regularizer_alpha * reg_losses
     tf.summary.scalar('total_loss', loss)
     
     # Calculate accuracy tensor
@@ -350,6 +355,8 @@ def train():
     if args.restore_training == 0:
       init = tf.global_variables_initializer()
       sess.run(init)
+      init_op = tf.initialize_all_variables()
+      sess.run(init_op)
       ckpt_number = 0 
     if args.restore_training == 1:
       # Restore Session from last check-point  
@@ -390,7 +397,7 @@ def train():
   	   'is_training_pl': is_training_pl,
   	   'pred': pred,
   	   'loss': loss,
-       'reg_losses': reg_losses,
+      #  'reg_losses': reg_losses,
   	   'acc':accuracy,
   	   'train_op': train_op,
   	   'params': params,
@@ -481,20 +488,35 @@ def train_one_epoch(sess,ops,train_writer, epoch):
     nr_batches_in_a_epoch = int(total_frames/ ( BATCH_SIZE * SEQ_LENGTH) )
     #nr_batches_in_a_epoch = int(440/3) #440
     
-    avg_epoch_loss =0 
-    avg_epoch_accuracy = 0
-    avg_regu_loss =0
+    avg_epoch_loss =0.
+    avg_epoch_accuracy = 0.
+    avg_regu_loss =0.
     for batch_idx in tqdm (range(0,nr_batches_in_a_epoch) ):
       # Load Batch Data at Random 
       batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
       batch = np.array(batch_data)
-      print("\n\n\n\n\n\n\ntest_seq", np.shape(batch))
+      print("\n\n\n\n\n\n\ntest_seq", np.shape(batch), "\n\n\n\n\n\n\n")
       input_point_clouds = batch[:,:,:,0:3]
       input_labels = batch[:,:,:,3:4]
       
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-      pred, lr_patience, summary, step, train_op, loss, regu_loss, accuracy =  sess.run([ops['pred'], ops['lr_patience'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['reg_losses'], ops['acc']], feed_dict=feed_dict)
-      avg_regu_loss = avg_regu_loss + regu_loss
+      # pred, lr_patience, summary, step, train_op, loss, regu_loss, accuracy =  sess.run([ops['pred'], ops['lr_patience'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['reg_losses'], ops['acc']], feed_dict=feed_dict)
+      pred, \
+        lr_patience, \
+        summary, \
+        step, \
+        train_op, \
+        loss, \
+        accuracy =  sess.run(
+           [ops['pred'], 
+            ops['lr_patience'], 
+            ops['merged'], 
+            ops['step'], 
+            ops['train_op'], 
+            ops['loss'], 
+            ops['acc']], 
+            feed_dict=feed_dict)
+      avg_regu_loss = avg_regu_loss
       avg_epoch_loss = avg_epoch_loss + loss
       avg_epoch_accuracy = avg_epoch_accuracy + accuracy
       
@@ -523,12 +545,12 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
     x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
     if (BATCH_SIZE not in x): print("[NOT LOADING ALL TEST DATA] - To test the full test data: select a batch size:", x)
 
-    total_accuracy =0
-    total_loss = 0
-    Tp =0 #true positives total
-    Tn =0
-    Fp =0
-    Fn =0
+    total_accuracy =0.
+    total_loss = 0.
+    Tp =0. #true positives total
+    Tn =0.
+    Fp =0.
+    Fn =0.
     
     for batch_idx in tqdm ( range(num_batches) ):
       start_idx = batch_idx * BATCH_SIZE

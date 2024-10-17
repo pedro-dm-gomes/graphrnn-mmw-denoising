@@ -1,6 +1,7 @@
 import os
 import sys
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import numpy as np
 """
 Implement a Basic GNN Architecture 
@@ -20,6 +21,10 @@ import graph_rnn_modules as modules
 import tf_util
 from transform_nets import input_transform_net, feature_transform_net
 from tf_grouping import query_ball_point, group_point, knn_point, knn_feat
+
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 def placeholder_inputs(batch_size, seq_length, num_points):
   
@@ -50,7 +55,7 @@ def get_model(point_cloud, is_training, model_params):
   end_points = {}
   
   #Stacked Frames processing
-  context_frames = 0
+  context_frames = 0.
   hop0 = 1
   hop1 = 1
   hop2 = 1
@@ -163,7 +168,7 @@ def get_model(point_cloud, is_training, model_params):
   V_l0_grouped = group_point(V_l0, l0_nn_idx) 
   V_l0_expanded = tf.expand_dims(V_l0, 2)
   V_l0_expanded = tf.tile(V_l0_expanded, [1, 1, num_samples, 1])
-   
+    
   attended_Vl0 = tf.matmul(attention_weights_l0, V_l0)
   attended_Vl0_expanded =  tf.expand_dims(attended_Vl0, 2)
   attended_Vl0_expanded = tf.tile(attended_Vl0_expanded, [1, 1, num_samples, 1]) 
@@ -173,8 +178,8 @@ def get_model(point_cloud, is_training, model_params):
   print("l0_top_values", l0_top_values)
   attention_expanded = tf.expand_dims(l0_top_values, axis=-1)
   edge_feature = tf.concat([V_l0_expanded, attended_Vl0_expanded,V_l0_grouped, attention_expanded], axis =3)
+      
     
-  
   # GNN layer 0
   with tf.variable_scope('GNN_0') as sc:
     l0_feats = tf_util.conv2d(edge_feature, 
@@ -476,17 +481,19 @@ def get_model(point_cloud, is_training, model_params):
   print("global_concatenation", global_concatenation)
   concatenation = tf.concat( (global_concatenation, global_feat_repeat) , axis=2 )
   print("concatenation", concatenation)
-  
 
-  concatenation = tf_util.dropout(concatenation, keep_prob=0.75, is_training=is_training, scope='dp1')
+  concatenation = tf.keras.layers.Dropout(rate=0.25, )(concatenation)
   net = tf_util.conv1d(concatenation, 512, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc0', bn_decay=bn_decay)
-  net = tf_util.dropout(net, keep_prob=0.65, is_training=is_training, scope='dp2')
+  net = tf.keras.layers.Dropout(rate=0.35)(net)
   net = tf_util.conv1d(net, 256, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc1', bn_decay=bn_decay)
   net = tf_util.conv1d(net, 128, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc2', bn_decay=bn_decay)
-  net = tf_util.dropout(net, keep_prob=0.60, is_training=is_training, scope='dp3')
+  net = tf.keras.layers.Dropout(rate=0.40)(net)
   net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc3', bn_decay=bn_decay)
   net_last =  net
-  predicted_labels = tf_util.conv1d(net, 2, 1, padding='VALID',activation_fn=None, bn=BN_FLAG, is_training=is_training, scope='fc4', bn_decay=bn_decay)
+  print_op = tf.print(" \n\n\n\n\n TTTTTTTTTTTTTTTTTTTTTTTTT", tf.shape(net_last), "\n\n\n\n\n\n",output_stream=sys.stdout)
+  with tf.control_dependencies([print_op]):
+    predicted_labels = tf_util.conv1d(inputs=net_last, num_output_channels=2, kernel_size=1, padding='VALID',activation_fn=None, bn=BN_FLAG, is_training=is_training, scope='fc4', bn_decay=bn_decay)
+  
   
   print("predicted_labels", predicted_labels)
   print("net_last", net_last)
@@ -516,7 +523,7 @@ def get_loss(predicted_labels, ground_truth_labels, context_frames):
   predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
   predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
   
-  sequence_loss = 0
+  sequence_loss = 0.
   #Calculate loss frame by frame
   for frame in range(context_frames,seq_length ):
     logits = predicted_labels[frame]
@@ -551,7 +558,7 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
   predicted_labels = tf.split(value = predicted_labels , num_or_size_splits=seq_length, axis=1) 
   predicted_labels = [tf.squeeze(input=label, axis=[1]) for label in predicted_labels]  
   
-  sequence_loss = 0
+  sequence_loss = 0.
   #Calculate loss frame by frame
   for frame in range(context_frames,seq_length ):
     logits = predicted_labels[frame]
@@ -562,7 +569,7 @@ def get_balanced_loss(predicted_labels, ground_truth_labels, context_frames):
     labels = tf.cast(labels, tf.int32)
 
     #print("--- Normal Classification ---")
-    frame_loss =0
+    frame_loss =0.
     frame_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
     frame_loss = tf.cast(frame_loss, tf.float32)
     

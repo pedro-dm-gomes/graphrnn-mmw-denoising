@@ -1,0 +1,37 @@
+absl-py
+astor
+cachetools
+certifi
+cycler
+dataclasses
+gast
+# grpcio
+importlib-metadata
+importlib-resources
+joblib
+kiwisolver
+Markdown
+numpy
+matplotlib
+nvidia-ml-py
+nvitop
+pandas
+Pillow
+protobuf
+psutil
+pyparsing
+python-dateutil
+pytz
+scikit-learn
+scipy
+seaborn
+six
+scikit-learn
+# tensorflow-gpu
+# tensorboard
+termcolor
+threadpoolctl
+tqdm
+typing_extensions
+Werkzeug
+zipp

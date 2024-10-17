@@ -1,0 +1,27 @@
+FROM tensorflow/tensorflow:2.17.0-gpu
+
+RUN apt update && apt upgrade -y
+
+RUN apt install -y \
+    build-essential \
+    cmake \
+    git \
+    libboost-all-dev \
+    libeigen3-dev \
+    libflann-dev \
+    libgmp-dev \
+    libmpfr-dev \
+    libtbb-dev \
+    libtool \
+    libxml2-dev \
+    pkg-config \
+    wget
+
+RUN apt purge -y python3.10 python3-pip && apt autoremove -y
+RUN apt install -y python3-pip
+RUN rm -rf /usr/bin/python3 && ln -s /usr/bin/python3.11 /usr/bin/python3
+
+RUN python -m pip install --upgrade pip
+
+COPY ./requirements2.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
