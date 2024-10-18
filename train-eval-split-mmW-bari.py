@@ -279,12 +279,15 @@ def train():
     print("regularizer_scale", regularizer_scale)
     params_to_be_regulaized = []
     params = tf.trainable_variables()
+    reg_losses = 0.
     for layer in params:
       #only add regulaizer to layers with weights and bias. Exclude the bacth norm layers
       if ( ('weight' in layer.name)  or ('bias' in layer.name) ) :
-        params_to_be_regulaized.append(layer)
+        # params_to_be_regulaized.append(layer)
+        reg_losses += regularizer_scale*tf.nn.l2_loss(layer)
 
     # regularizer = tf.keras.regularizers.l2(regularizer_scale)(params_to_be_regulaized)
+    # regularizer = tf.contrib.layers.l2_regularizer(regularizer_scale)
     # reg_term = tf.contrib.layers.apply_regularization(regularizer,params_to_be_regulaized)
     #print("reg_term", reg_term)
     #tf.summary.scalar('reg_term', reg_term)
@@ -292,10 +295,11 @@ def train():
     # reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
     # print("reg_losses", reg_losses)
     # reg_losses= sum(reg_losses)
+    # reg_losses = sum([regularizer_scale*tf.nn.l2_loss(p) for p in params_to_be_regulaized])
     # print("reg_losses", reg_losses)
     # exit()
     # tf.summary.scalar('reg_losses', reg_losses  )
-    loss =  loss #+ regularizer_alpha * reg_losses
+    loss =  loss + regularizer_alpha * reg_losses
     tf.summary.scalar('total_loss', loss)
     
     # Calculate accuracy tensor

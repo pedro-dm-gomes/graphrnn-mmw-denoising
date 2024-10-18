@@ -490,9 +490,7 @@ def get_model(point_cloud, is_training, model_params):
   net = tf.keras.layers.Dropout(rate=0.40)(net)
   net = tf_util.conv1d(net, 64, 1, padding='VALID', bn=BN_FLAG, is_training=is_training, scope='fc3', bn_decay=bn_decay)
   net_last =  net
-  print_op = tf.print(" \n\n\n\n\n TTTTTTTTTTTTTTTTTTTTTTTTT", tf.shape(net_last), "\n\n\n\n\n\n",output_stream=sys.stdout)
-  with tf.control_dependencies([print_op]):
-    predicted_labels = tf_util.conv1d(inputs=net_last, num_output_channels=2, kernel_size=1, padding='VALID',activation_fn=None, bn=BN_FLAG, is_training=is_training, scope='fc4', bn_decay=bn_decay)
+  predicted_labels = tf_util.conv1d(inputs=net_last, num_output_channels=2, kernel_size=1, padding='VALID',activation_fn=None, bn=BN_FLAG, is_training=is_training, scope='fc4', bn_decay=bn_decay)
   
   
   print("predicted_labels", predicted_labels)
