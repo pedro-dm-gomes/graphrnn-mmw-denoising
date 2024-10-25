@@ -25,6 +25,29 @@ def get_dataset_split(split_number):
         
     if (split_number == 12): # Split 11
         test_npy_files =  [68,77,84,95,87]    
+
+    if (split_number == 11): # Split 11
+        test_npy_files =  [69,73,3,55, 53,67,74,80,88,96,61,6,64,92,70,85,50,56,57] # missing 9 test + val
+  
+
+    if (split_number == 13): # Split 13
+        #test_npy_files =  [68,77,84,95,87, 98,93,86,75,65,62,4,49,7,51,72] # test + val
+        test_npy_files =  [3,4,6,7,8,49,50,51,53,54,55] # test + val
+
+    if (split_number == 14): # Split 14
+        test_npy_files =  [3,4,6,7,8,49,50,51,53,54,55] # test + val
+        
+    if (split_number == 15): # Split 14
+        test_npy_files =  [71,72,73,74,75,76,77,79,63] # test + val
+        
+    if (split_number == 16): # Split 16
+        test_npy_files =  [71,72,73,74,75,76,77,79] # test + val
+        
+    if (split_number == 4): # Split 16
+        test_npy_files =  [57,58,59,61,62,63,64,65,66,67,69,70]  
+        
+    if (split_number == 17): # Split 14
+        test_npy_files =  [3,4,6,7,8,49,50,51,53,54,55,56] # test + val
             
     test_npy_files = [ 'labels_run_' + str(num)+ '.npy' for num in test_npy_files]
 

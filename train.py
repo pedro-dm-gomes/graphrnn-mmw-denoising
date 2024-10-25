@@ -17,17 +17,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 sys.path.append(os.path.join(BASE_DIR, 'models'))
 
-# physical_devices = tf.config.experimental.list_physical_devices('GPU') 
-# tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 parser = argparse.ArgumentParser()
 """ --  Training  hyperparameters --- """
 parser.add_argument('--gpu', default='0', help='Select GPU to run code [default: 0]')
 parser.add_argument('--data-dir', default='./data/npys', help='Dataset directory')
-parser.add_argument('--batch-size', type=int, default=8, help='Batch Size during training [default: 16]')
-parser.add_argument('--data-split', type=int, default=0, help='Select the train/test/ data split  [default: 0,1,2]')
+parser.add_argument('--batch-size', type=int, default=32, help='Batch Size during training [default: 16]')
+parser.add_argument('--data-split', type=int, default=13, help='Select the train/test/ data split  [default: 0,1,2]')
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
-parser.add_argument('--learning-rate', type=float, default=1e-4, help='Learning rate [default: 1e-4]')
+parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate [default: 1e-4]')
 parser.add_argument('--max-gradient-norm', type=float, default=5.0, help='Clip gradients[default: 5.0 or 1e10 no clip].')
 parser.add_argument('--restore-training', type= int , default = 0 , help='restore-training [default: 0=False 1= True]')
 
@@ -37,11 +35,11 @@ parser.add_argument('--save-summary', type=int, default=2, help='Iterations to u
 parser.add_argument('--save-iters', type=int, default=2, help='Iterations to save examples [default: 100000]')
 
 """ --  Model  hyperparameters --- """
-parser.add_argument('--model', type=str, default='Stacked_GraphAttention_parallel_MSGGNN_Transformer_cls', help='Simple model or advanced model [default: advanced]')
+parser.add_argument('--model', type=str, default='TG_tf2', help='Simple model or advanced model [default: advanced]')
 parser.add_argument('--graph_module', type=str, default='Simple_GraphRNNCell', help='Simple model or advanced model [default: Simple_GraphRNNCell]')
 parser.add_argument('--out_channels', type=int, default=64, help='Dimension of feat [default: 64]')
 parser.add_argument('--num-samples', type=int, default=8, help='Number of samples [default: 4]')
-parser.add_argument('--seq-length', type=int, default=30, help='Length of sequence [default: 30]')
+parser.add_argument('--seq-length', type=int, default=12, help='Length of sequence [default: 30]')
 parser.add_argument('--num-points', type=int, default=200, help='Number of points [default: 1000]')
 parser.add_argument('--step-length', type=float, default=0.1, help='Step length [default: 0.1]')
 parser.add_argument('--log-dir', default='./new_outputs_mmw', help='Log dir [default: outputs/mmw]')
@@ -56,12 +54,12 @@ parser.add_argument('--context-frames', type= int , default = 0, help='[default:
 parser.add_argument('--bn_flag', type=int, default=1, help='Do batch normalization[ 1- Yes, 0-No]')
 parser.add_argument('--balanced_loss', type=int, default=0, help='Do balanced loss [ 1- Yes, 0-No]')
 parser.add_argument('--weight_decay', type=int, default=0, help='Do Weight Decay normalization [ 1- Yes, 0-No]')
-parser.add_argument('--lr_scheduler', type=int, default=0, help='lr_scheduler [default: 0]')
+parser.add_argument('--lr_scheduler', type=int, default=2, help='lr_scheduler [default: 0, 2-> keeps getting reduced]')
 parser.add_argument('--decay_step', type=int, default=10000, help='Decay step for lr decay [default: 200000]')
 parser.add_argument('--decay_rate', type=float, default=0.25, help='Decay rate for lr decay [default: 0.8]') 
 parser.add_argument('--drop_rate', type=float, default=0.5, help='Dropout rate in second last layer[default: 0.0]') 
 parser.add_argument('--regularizer_scale', type=float, default=0.00, help='Regulaizer value[default: 0.0- or 0.001]') 
-parser.add_argument('--regularizer_alpha', type=float, default=0.1, help='Regulaizer value[default: 0.0- or 0.001]') 
+parser.add_argument('--regularizer_alpha', type=float, default=0.0, help='Regulaizer value[default: 0.0- or 0.001]') 
 print("\n ==== MMW POINT CLODU DENOISING (BARI DATASET) ====== \n")
 
 args = parser.parse_args()
@@ -69,7 +67,7 @@ np.random.seed(999)
 tf.set_random_seed(999)
 
 # Define the GPU to run the code
-# os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
+os.environ["CUDA_VISIBLE_DEVICES"]= args.gpu
 
 # Flags
 BATCH_SIZE = args.batch_size
@@ -88,8 +86,8 @@ BN_DECAY_DECAY_RATE = 0.5
 BN_DECAY_DECAY_STEP = float(DECAY_STEP)
 BN_DECAY_CLIP = 0.99
 
-PATIENCE_LIMIT = 50
-lr_patience = 0.
+PATIENCE_LIMIT = 20
+
 
 """  Setup Directorys """
 MODEL = importlib.import_module(args.model) # import network module
@@ -179,7 +177,6 @@ def get_batch(dataset, batch_size):
     batch_data = []
     for i in range(batch_size):
         sample = dataset[0]
-        print("sample", np.shape(sample))
         batch_data.append(sample)
     return np.stack(batch_data, axis=0)
 
@@ -232,13 +229,14 @@ def train():
     is_training_pl = tf.placeholder(tf.bool, shape=())
     pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, SEQ_LENGTH, NUM_POINTS)
 
-  
+    batch = tf.Variable(0)
+    lr_patience = tf.Variable(0.0)
+    
     print("pointclouds_pl", pointclouds_pl)
     print("labels_pl", labels_pl)
     print("is_training_pl:", is_training_pl)
+    print("lr_patience", lr_patience)
 
-    batch = tf.Variable(0.)
-    lr_patience  = tf.Variable(0.)
     
     if args.weight_decay == 0: bn_decay = 0.0
     else: bn_decay = get_bn_decay(batch) 
@@ -256,7 +254,6 @@ def train():
   	   	    'sampled_points_down3':args.down_points3}
 
     pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, model_params)
-    print("Model loaded. \n\n\n\n\n\n")
     
     # Normal Loss
     if args.balanced_loss == 0:
@@ -336,7 +333,7 @@ def train():
     
     # Create a session
     config = tf.ConfigProto()
-    # config.gpu_options.per_process_gpu_memory_fraction = 0.9
+    config.gpu_options.per_process_gpu_memory_fraction = 0.9
     # config.gpu_options.allow_growth = True
     # config.gpu_options.polling_inactive_delay_msecs = 10
     config.allow_soft_placement = True
@@ -391,9 +388,10 @@ def train():
       print ("\n** Restore from checkpoint ***: ", restore_checkpoint_path)
 
       saver.restore(sess, restore_checkpoint_path)
-    # change random seed
-    np.random.seed(ckpt_number)
-    tf.set_random_seed(ckpt_number)    
+      
+      # change random seed
+      np.random.seed(ckpt_number)
+      tf.set_random_seed(ckpt_number)    
 
     
     ops = {'pointclouds_pl': pointclouds_pl,
@@ -401,7 +399,7 @@ def train():
   	   'is_training_pl': is_training_pl,
   	   'pred': pred,
   	   'loss': loss,
-      #  'reg_losses': reg_losses,
+       'reg_losses': reg_losses,
   	   'acc':accuracy,
   	   'train_op': train_op,
   	   'params': params,
@@ -410,11 +408,10 @@ def train():
   	   'step': batch}
 
         
-    lr_patience_level = 0
     for epoch in range(ckpt_number, args.num_iters):
       
       #  Test Data Val 
-      if  (epoch > 0 and (epoch % 1 == 0 or epoch ==ckpt_number) ):        
+      if  (epoch > 2 and (epoch % 1 == 0 or epoch ==ckpt_number) ):        
         # Save Checkpoint
         save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
         print("Model saved in file: %s" % save_path)
@@ -427,16 +424,13 @@ def train():
         if val_loss < best_validation_loss:
           best_validation_loss = val_loss
           print("[Lowest loss]:",best_validation_loss )
+          print("[Patience count]:", early_stop_count)
           early_stop_count = 0
         else:
           early_stop_count = early_stop_count + 1
           print("[Lowest loss]:",best_validation_loss )
-          print("[PATIENCE]:", early_stop_count)
+          print("[Patience count]:", early_stop_count)
           
-        if early_stop_count > PATIENCE_LIMIT:   
-          log_string("\n\n---- [EARLY STOP ] -----\n\n")
-          exit()
-             
         # Restore Checkpoint
         """  BUG! In some modules the weights are updated during evaluation """
         ckpt_number = os.path.basename(os.path.normpath(tf.train.latest_checkpoint(LOG_DIR)))
@@ -445,6 +439,7 @@ def train():
         ckpt_number= int( ckpt_number[11:] )
         np.random.seed(ckpt_number)
         tf.set_random_seed(ckpt_number)  
+        ##restore patience-level
 
         # Saved the Best Model
         if val_loss == best_validation_loss:
@@ -454,12 +449,21 @@ def train():
           print("Best Model saved in file: %s" % best_save_path)
           #Save Again in normal path
           save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"), global_step = epoch)
+          #Save patience-level
           
-      if (early_stop_count%10 == 0 and early_stop_count != 0 ): # Each time the patience reaches the value limit the learning rate decreases.
-        lr_patience_level = lr_patience_level +1
-        lr_patience = tf.assign(lr_patience, lr_patience_level )  # each batch does this operation
-        ops['lr_patience'] = lr_patience        
-          
+      if (early_stop_count%15 == 0 and early_stop_count != 0 ): # Each time the patience reaches the value limit the learning rate decreases.
+        """
+        When early stop count reache 10 the patience is increased by 1
+        When the patience is 10 the model exits training
+        """
+        #print("Type of lr_patience:", type(lr_patience))
+        increment_lr_patience = lr_patience.assign_add(1.0)
+        #print("Type of lr_patience:", type(lr_patience))
+        sess.run(increment_lr_patience)
+        ops['lr_patience'] = lr_patience
+        early_stop_count = 0       
+        
+
       # Train one epoch
       if (epoch % 1 == 0):
         train_one_epoch(sess, ops,train_writer, epoch)
@@ -481,7 +485,7 @@ def train():
 def train_one_epoch(sess,ops,train_writer, epoch):
     """ Train one epoch of training data """
     is_training = True
-    
+  
     # for adaptative learning rate
     batch = epoch
     
@@ -491,132 +495,135 @@ def train_one_epoch(sess,ops,train_writer, epoch):
     #for j in range(0, training_size ): total_frames = total_frames +  np.shape(train_dataset.data[j])[0]
     nr_batches_in_a_epoch = int(total_frames/ ( BATCH_SIZE * SEQ_LENGTH) )
     #nr_batches_in_a_epoch = int(440/3) #440
+    if args.data_split == -1: #Fast Debug
+      nr_batches_in_a_epoch = 20
     
-    avg_epoch_loss =0.
-    avg_epoch_accuracy = 0.
-    avg_regu_loss =0.
+    avg_epoch_loss = 0 
+    avg_epoch_accuracy = 0
+    avg_regu_loss = 0
     for batch_idx in tqdm (range(0,nr_batches_in_a_epoch) ):
       # Load Batch Data at Random 
       batch_data = get_batch(dataset=train_dataset, batch_size=args.batch_size) 
       batch = np.array(batch_data)
-      print("\n\n\n\n\n\n\ntest_seq", np.shape(batch), "\n\n\n\n\n\n\n")
       input_point_clouds = batch[:,:,:,0:3]
       input_labels = batch[:,:,:,3:4]
       
       feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-      # pred, lr_patience, summary, step, train_op, loss, regu_loss, accuracy =  sess.run([ops['pred'], ops['lr_patience'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['reg_losses'], ops['acc']], feed_dict=feed_dict)
       pred, \
         lr_patience, \
         summary, \
         step, \
         train_op, \
         loss, \
-        accuracy =  sess.run(
-           [ops['pred'], 
-            ops['lr_patience'], 
-            ops['merged'], 
-            ops['step'], 
-            ops['train_op'], 
-            ops['loss'], 
-            ops['acc']], 
-            feed_dict=feed_dict)
-      avg_regu_loss = avg_regu_loss
+        regu_loss, \
+        accuracy =  sess.run([
+           ops['pred'], 
+           ops['lr_patience'], 
+           ops['merged'], 
+           ops['step'], 
+           ops['train_op'], 
+           ops['loss'], 
+           ops['reg_losses'], 
+           ops['acc']], 
+           feed_dict=feed_dict)
+      avg_regu_loss = avg_regu_loss + regu_loss
       avg_epoch_loss = avg_epoch_loss + loss
       avg_epoch_accuracy = avg_epoch_accuracy + accuracy
       
       train_writer.add_summary(summary, step)
     
-    print("lr_patience", lr_patience)
+    print("\n lr_patience", lr_patience,'\n')
     avg_epoch_loss = avg_epoch_loss/nr_batches_in_a_epoch
     avg_epoch_accuracy =avg_epoch_accuracy/nr_batches_in_a_epoch
     avg_regu_loss = avg_regu_loss/nr_batches_in_a_epoch
     print("[ %s  e:%03d ] Loss: %f\t Regu Loss %f\t  Accuracy: %f\t"%( str( args.model + '_' + args.version) ,  epoch, avg_epoch_loss, avg_regu_loss, avg_epoch_accuracy) )
-           
+   
+   
+    #Got acess to lr_patience value 
+    if lr_patience > 20:
+      #Early Stop
+      log_string("\n\n---- [EARLY STOP ] No more Patience -----\n\n")
+      exit()                     
     
-    
-
-                 
 def eval_one_epoch(sess,ops,test_writer, epoch):
-    """ Eval all sequences of test dataset """
-    is_training = False
-    
-    nr_tests = len(test_dataset) 
-    num_batches = nr_tests // BATCH_SIZE
-    #print("nr_tests :", nr_tests)
-    #print("BATCH_SIZE:", BATCH_SIZE)
-    #print("num_batches:", num_batches)
-    
-    x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
-    if (BATCH_SIZE not in x): print("[NOT LOADING ALL TEST DATA] - To test the full test data: select a batch size:", x)
-
-    total_accuracy =0.
-    total_loss = 0.
-    Tp =0. #true positives total
-    Tn =0.
-    Fp =0.
-    Fn =0.
-    
-    for batch_idx in tqdm ( range(num_batches) ):
-      start_idx = batch_idx * BATCH_SIZE
-      end_idx = (batch_idx+1) * BATCH_SIZE
-      cur_batch_size = end_idx - start_idx
-      input_point_clouds =[]
-      input_labels =[]
-      
-      for idx  in range(start_idx,end_idx): #sequences to be tested
-        test_seq = test_dataset[idx]   
-        test_seq =np.array(test_seq)
-        point_clouds = test_seq[:,:,0:3]
-        labels = test_seq[:,:,3:4]
-        input_point_clouds.append(point_clouds)
-        input_labels.append(labels)
-      
-      input_point_clouds = np.array(input_point_clouds)
-      input_labels = np.array(input_labels)
-      
-      # Send to model to be evaluated
-      feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
-      pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
-      test_writer.add_summary(summary, step)  
-      
-      total_accuracy = total_accuracy + accuracy
-      total_loss = total_loss + loss
-      accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
-      Tp = Tp + (true_positives) 
-      Fp = Fp + (false_positives)
-      Tn = Tn + (true_negatives)
-      Fn = Fn + (false_negatives)
+  """ Eval all sequences of test dataset """
+  is_training = False
   
-                   
+  nr_tests = len(test_dataset) 
+  num_batches = nr_tests // BATCH_SIZE
 
-    
-    mean_loss = total_loss/ num_batches
-    mean_accuracy = total_accuracy/ num_batches
-    precision = Tp / ( Tp+Fp)
-    recall = Tp/(Tp+Fn)
-    f1_score =2 * ( (precision * recall)/(precision+recall) )
-    
-    print('**** EVAL: %03d  %s ****' % (epoch, str( args.model + '_' + args.version) ) )
-    print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
-    print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
-    print(' -- ')   
-    
-    """ Visualize weights in terminal """
-    #print_weights(sess, params, 1)
-    #print_weights(sess, params, 9)
-    #print_weights(sess, params, 10)
-    #print_weights(sess, params, 30)
-    #print_weights(sess, params, layer_nr=57)
-    #print_weights(sess, params, layer_nr=61)
+  
+  x = [i for i in range(1, nr_tests+1) if nr_tests % i == 0]
+  if (BATCH_SIZE not in x): print("[NOT LOADING ALL TEST DATA] - To test the full test data: select a batch size:", x)
 
-    # Write to File
-    #log_string('****  %03d ****' % (epoch))
-    date_string = str(datetime.now().hour) +':'+ str(datetime.now().minute) + '   -' +str(datetime.now().day)+'/'+str(datetime.now().month)
-    log_string('%03d  eval mean loss, accuracy: %f \t  %f \t %s' % (epoch, mean_loss , mean_accuracy, date_string))
-    if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
-    	log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
-     
-    return mean_loss        
+  total_accuracy =0
+  total_loss = 0
+  Tp =0 #true positives total
+  Tn =0
+  Fp =0
+  Fn =0
+  
+  for batch_idx in tqdm ( range(num_batches) ):
+    start_idx = batch_idx * BATCH_SIZE
+    end_idx = (batch_idx+1) * BATCH_SIZE
+    cur_batch_size = end_idx - start_idx
+    input_point_clouds =[]
+    input_labels =[]
+    
+    for idx  in range(start_idx,end_idx): #sequences to be tested
+      test_seq = test_dataset[idx]   
+      test_seq =np.array(test_seq)
+      point_clouds = test_seq[:,:,0:3]
+      labels = test_seq[:,:,3:4]
+      input_point_clouds.append(point_clouds)
+      input_labels.append(labels)
+    
+    input_point_clouds = np.array(input_point_clouds)
+    input_labels = np.array(input_labels)
+    
+    # Send to model to be evaluated
+    feed_dict = {ops['pointclouds_pl']: input_point_clouds, ops['labels_pl']: input_labels, ops['is_training_pl']: is_training}
+    pred, summary, step, train_op, loss, accuracy, params =  sess.run([ops['pred'], ops['merged'], ops['step'], ops['train_op'], ops['loss'], ops['acc'], ops['params'] ], feed_dict=feed_dict) 
+    test_writer.add_summary(summary, step)  
+    
+    total_accuracy = total_accuracy + accuracy
+    total_loss = total_loss + loss
+    accuracy, true_positives, false_positives, true_negatives,false_negatives = get_classification_metrics(pred, input_labels, args.batch_size, args.seq_length,args.num_points, args.context_frames )
+    Tp = Tp + (true_positives) 
+    Fp = Fp + (false_positives)
+    Tn = Tn + (true_negatives)
+    Fn = Fn + (false_negatives)
+
+                  
+
+  
+  mean_loss = total_loss/ num_batches
+  mean_accuracy = total_accuracy/ num_batches
+  precision = Tp / ( Tp+Fp)
+  recall = Tp/(Tp+Fn)
+  f1_score =2 * ( (precision * recall)/(precision+recall) )
+  
+  print('**** EVAL: %03d  %s ****' % (epoch, str( args.model + '_' + args.version) ) )
+  print("[VALIDATION] Loss   %f\t  Accuracy: %f\t"%( mean_loss, mean_accuracy) )
+  print("Precision: ", precision, "\nRecall: ", recall, "\nF1 Score:", f1_score)
+  print(' -- ')   
+  
+  """ Visualize weights in terminal """
+  #print_weights(sess, params, 1)
+  #print_weights(sess, params, 9)
+  #print_weights(sess, params, 10)
+  #print_weights(sess, params, 30)
+  #print_weights(sess, params, layer_nr=57)
+  #print_weights(sess, params, layer_nr=61)
+
+  # Write to File
+  #log_string('****  %03d ****' % (epoch))
+  date_string = str(datetime.now().hour) +':'+ str(datetime.now().minute) + '   -' +str(datetime.now().day)+'/'+str(datetime.now().month)
+  log_string('%03d  eval mean loss, accuracy: %f \t  %f \t %s' % (epoch, mean_loss , mean_accuracy, date_string))
+  if not np.isnan(precision) and not np.isnan(recall) and not np.isnan(f1_score):
+    log_string('Precision %f Recall, F1 Score: %f \t  %f \t ]' % (precision, recall , f1_score))
+  
+  return mean_loss        
                 
                   
 if __name__ == "__main__":
