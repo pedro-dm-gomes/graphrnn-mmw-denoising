@@ -48,7 +48,7 @@ parser.add_argument('--seq-length', type=int, default=30, help='Length of sequen
 parser.add_argument('--num-points', type=int, default=200, help='Number of points [default: 1000]')
 parser.add_argument('--step-length', type=float, default=0.1, help='Step length [default: 0.1]')
 #parser.add_argument('--log-dir', default='outputs', help='Log dir [default: outputs/mmw]')
-parser.add_argument('--log-dir', default='/scratch/uceepdg/new_outputs_mmw', help='Log dir [default: outputs/mmw]')
+parser.add_argument('--log-dir', default='./new_outputs_mmw', help='Log dir [default: outputs/mmw]')
 
 parser.add_argument('--version', default='v0', help='Model version')
 parser.add_argument('--down-points1', type= float , default = 2 , help='[default:2 #points layer 1')
@@ -459,9 +459,9 @@ def eval_one_epoch(sess,ops,test_writer, epoch):
       #print_weights(sess, params, 82)
       
       """ Data Analyze """
-      DATA_DIR = '/scratch/uceepdg/Bari_Denoising_Analyze/'+ args.model + '_' + args.version +'/'
+      DATA_DIR = './new_outputs_mmw/Bari_Denoising_Analyze/'+ args.model + '_' + args.version +'/'
       if not os.path.exists(DATA_DIR): os.mkdir(DATA_DIR)
-      FPS_IDX_PATH = '/scratch/uceepdg/Fps_idxs_'+str(SEQ_LENGTH)+'_frames/'
+      FPS_IDX_PATH = './new_outputs_mmw/Fps_idxs_'+str(SEQ_LENGTH)+'_frames/'
       if not os.path.exists(FPS_IDX_PATH): os.mkdir(FPS_IDX_PATH)
 
 

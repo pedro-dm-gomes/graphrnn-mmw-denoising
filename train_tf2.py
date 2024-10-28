@@ -5,8 +5,7 @@ from datetime import datetime
 import argparse
 import numpy as np
 from PIL import Image
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 from datasets.bari_train_data_mem_efficient import MMW as Dataset_mmW
 #from datasets.bari_train_data import MMW as Dataset_mmW
 from datasets.bari_val_data import MMW as Dataset_mmW_val
@@ -27,7 +26,7 @@ parser.add_argument('--data-split', type=int, default=13, help='Select the train
 parser.add_argument('--num-iters', type=int, default=200000, help='Iterations to run [default: 200000]')
 parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate [default: 1e-4]')
 parser.add_argument('--max-gradient-norm', type=float, default=5.0, help='Clip gradients[default: 5.0 or 1e10 no clip].')
-parser.add_argument('--restore-training', type= int , default = 2 , help='restore-training [default: 0=False 1= True]')
+parser.add_argument('--restore-training', type= int , default = 0 , help='restore-training [default: 0=False 1= True]')
 
 """ --  Save  hyperparameters --- """
 parser.add_argument('--save-cpk', type=int, default=2, help='Iterations to save checkpoints [default: 1000]')
@@ -35,7 +34,7 @@ parser.add_argument('--save-summary', type=int, default=2, help='Iterations to u
 parser.add_argument('--save-iters', type=int, default=2, help='Iterations to save examples [default: 100000]')
 
 """ --  Model  hyperparameters --- """
-parser.add_argument('--model', type=str, default='TG_tf1_to_tf2', help='Simple model or advanced model [default: advanced]')
+parser.add_argument('--model', type=str, default='TG_tf2', help='Simple model or advanced model [default: advanced]')
 parser.add_argument('--graph_module', type=str, default='Simple_GraphRNNCell', help='Simple model or advanced model [default: Simple_GraphRNNCell]')
 parser.add_argument('--out_channels', type=int, default=64, help='Dimension of feat [default: 64]')
 parser.add_argument('--num-samples', type=int, default=8, help='Number of samples [default: 4]')
@@ -226,7 +225,7 @@ def log_string(out_str):
 def train():
   with tf.Graph().as_default():
     
-    is_training_pl = tf.placeholder(tf.bool, shape=())
+    is_training_pl = tf.Input(tf.bool, shape=())
     pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, SEQ_LENGTH, NUM_POINTS)
 
     batch = tf.Variable(0)
@@ -341,7 +340,6 @@ def train():
     sess = tf.Session( config =config)
     
     # Add summary writers
-    LOG_DIR = "./TG_s4_lr2"
     merged = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
     test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'))
@@ -394,7 +392,6 @@ def train():
       np.random.seed(ckpt_number)
       tf.set_random_seed(ckpt_number)    
 
-    exit()
     
     ops = {'pointclouds_pl': pointclouds_pl,
   	   'labels_pl': labels_pl,
